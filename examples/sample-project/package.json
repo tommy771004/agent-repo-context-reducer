@@ -1,0 +1,5 @@
+{
+  "name": "sample-project",
+  "scripts": {"start": "node src/index.js"},
+  "dependencies": {"express": "^5.0.0"}
+}
