@@ -1,0 +1,8 @@
+[
+  {
+    "task": "payment checkout order",
+    "expected_paths": [
+      "src/services/payment.js"
+    ]
+  }
+]

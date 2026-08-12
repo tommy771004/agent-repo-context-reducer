@@ -1,108 +1,45 @@
 ---
 name: agent-repo-context-reducer
-description: Build a compact structural map of a software repository before reading full source files. Use when asked to understand, review, explain, audit, or analyze an entire codebase or a large project. Prefer scan-first, then inspect only the files needed for reasoning.
+description: Prevent AI coding agents from blindly loading repository files. Build/sync a persistent graph index, route repository tasks to focused workflows, and generate token-budgeted context packs before full source reads.
 ---
 
 # Agent Repo Context Reducer
 
-Reduce repository context **before** it enters the model.
+Use this skill for repository understanding, debugging, code review, change-impact analysis, and other non-trivial codebase tasks.
 
-## When to use
+## Core rule
 
-Use this skill when the user asks to:
+**Index first. Query the graph before recursively reading source. Prefer symbol-level context over whole-file reads.**
 
-- understand an entire repository
-- analyze project architecture
-- review a large codebase
-- explain how a project works
-- find important modules or entry points
-- inspect a project before debugging or refactoring
-- compare architecture across many files
+The CLI is `repo-context` when installed. When it is not on PATH, run the bundled `scripts/repo_context.py` relative to this skill directory with Python 3.
 
-Do not start by reading every source file in full.
+## Mandatory entry workflow
 
-## Core workflow
+1. Run `repo-context status <repo>`.
+2. If no index exists, run `repo-context index <repo>`. Otherwise run `repo-context sync <repo>`.
+3. Run `repo-context route "<user task>"`.
+4. Read **only** the workflow and policy Markdown files returned by `route`. Do not load every reference file.
+5. Run `repo-context context <repo> "<user task>" --budget 6000 --session <session-id>`.
+6. Reason from that context pack first.
+7. If more implementation detail is necessary, use `repo-context symbol`, `deps`, `impact`, or `admit` before a whole-file read.
+8. Stop expanding context when the task is answerable. Treat `coverage` and `stop_condition` as heuristics, not proof.
 
-1. Run a repository scan.
-2. Read the generated project map.
-3. Identify entry points, central modules, dependency manifests, and likely hot spots.
-4. Inspect only the files needed to answer the user's question.
-5. Read full source only when implementation details are necessary.
+## Read policy
 
-## Commands
+Before a large/full source read, run:
 
-From the installed skill directory:
+`repo-context admit <repo> <file> "<user task>" --requested full`
 
-```bash
-python scripts/repo_context.py scan <repo-path> --pretty
-```
+If it returns `prefer-symbol` or `prefer-structure`, follow that recommendation unless the task genuinely requires full-file semantics.
 
-For a smaller subtree:
+## Graph semantics
 
-```bash
-python scripts/repo_context.py scan <repo-path>/src/services --pretty
-```
+The persistent graph represents resolved **static imports** and indexed symbol definitions. It is not a guaranteed runtime call graph. Dynamic dispatch, reflection, runtime dependency injection, generated code, and unresolved imports may be absent.
 
-To save the map:
+## Token semantics
 
-```bash
-python scripts/repo_context.py scan <repo-path> --pretty > /tmp/repo-context.json
-```
+Budgets use an approximate UTF-8-bytes/4 estimate. They are context-selection limits, not provider billing guarantees.
 
-## Output contract
+## Safety
 
-The scanner returns JSON containing:
-
-- project metadata
-- detected languages
-- framework/package hints
-- dependency manifests
-- entry-point candidates
-- directory summary
-- source-file summaries
-- imports/dependencies
-- class/function/type signatures
-- important-file ranking
-- estimated raw vs reduced context size
-
-## Reasoning boundary
-
-This tool is deterministic preprocessing. It should not:
-
-- decide whether code is correct
-- infer business intent that is not explicit
-- replace detailed source inspection
-- claim semantic equivalence between arbitrary code paths
-- make security conclusions from signatures alone
-
-The agent must perform reasoning after the reduction step.
-
-## Context rule
-
-Prefer:
-
-```text
-repository -> local scanner -> compact JSON -> agent reasoning -> selective source reads
-```
-
-Avoid:
-
-```text
-repository -> read every file into model context -> summarize afterward
-```
-
-Once tokens have already entered model context, the reducer cannot recover that cost.
-
-## Escalation
-
-After scanning, read full files when one of these is true:
-
-- the user asks about implementation details
-- a bug requires control-flow or state-flow reasoning
-- a security finding depends on exact data handling
-- generated structure is ambiguous
-- a file is ranked important and directly related to the requested task
-
-## Limitations
-
-The structural extractor is intentionally lightweight and dependency-free. It uses language-aware heuristics rather than full compiler ASTs for most languages. Treat extracted symbols as a navigation aid, not a formal parser result.
+Secret-like files, private keys, symlinks, large binaries, generated/minified output, VCS metadata, dependencies, and build directories are excluded by default. Do not override these guards merely to increase coverage.

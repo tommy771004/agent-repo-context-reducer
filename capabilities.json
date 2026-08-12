@@ -1,0 +1,44 @@
+{
+  "schema": "repo-context-capabilities/v1",
+  "provider": {
+    "name": "agent-repo-context-reducer",
+    "version": "1.0.0"
+  },
+  "provides": [
+    "context.budget",
+    "context.dedup",
+    "context.session",
+    "context.delta",
+    "context.lifecycle",
+    "context.provenance",
+    "harness.trace",
+    "harness.replay",
+    "harness.tool-policy",
+    "harness.fanout-policy",
+    "repository.index",
+    "repository.graph",
+    "repository.symbols",
+    "repository.imports",
+    "repository.references",
+    "repository.impact",
+    "code.read-symbol"
+  ],
+  "notes": {
+    "primary": [
+      "context.budget",
+      "context.dedup",
+      "context.session",
+      "context.lifecycle",
+      "context.provenance"
+    ],
+    "fallback": [
+      "repository.index",
+      "repository.graph",
+      "repository.symbols",
+      "repository.imports",
+      "repository.references",
+      "repository.impact",
+      "code.read-symbol"
+    ]
+  }
+}

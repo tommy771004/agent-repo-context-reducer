@@ -1,4 +1,4 @@
-export class PaymentService {
-  async charge(input) { return { ok: true, input }; }
-  async refund(id) { return { ok: true, id }; }
+async function charge(amount) {
+  return { id: "pay_demo", amount };
 }
+module.exports = { charge };

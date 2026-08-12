@@ -3,13 +3,14 @@
 </p>
 
 <p align="center">
-  A deterministic repository context reducer for AI coding agents.
+  Task-aware repository navigation and context reduction for AI coding agents.
 </p>
 
 <p align="center">
   <a href="https://github.com/tommy771004/agent-repo-context-reducer/actions"><img src="https://github.com/tommy771004/agent-repo-context-reducer/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue" alt="Python 3.10+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen" alt="Zero runtime dependencies">
 </p>
 
 <p align="center">
@@ -17,71 +18,110 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#commands">Commands</a> &bull;
+  <a href="#safety">Safety</a> &bull;
   <a href="#limitations">Limitations</a>
+</p>
+
+<p align="center">
+  <a href="README.md"><strong>English</strong></a> &bull;
+  <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 ---
 
-**Agent Repo Context Reducer** builds a compact structural map of a software repository **before** an AI agent reads full source files into its context.
+**Agent Repo Context Reducer** helps Claude Code, Codex, Cursor, OpenCode and other coding agents understand a large repository **without reading every source file into model context first**.
 
-It is designed for prompts like:
+It scans code locally, builds a lightweight dependency graph and symbol index, ranks files for the current task, and returns only the most useful structural context. The model can then selectively open full source where detailed reasoning is actually needed.
 
-> Read this entire project and explain the architecture.
+```text
+Without reducer
 
-> Review this codebase and identify the important modules.
+User prompt
+   |
+   v
+Agent reads hundreds/thousands of files
+   |
+   v
+Large context wall
+   |
+   v
+Reasoning
 
-> Understand this repository before we refactor it.
 
-Instead of encouraging the agent to read hundreds of files first and summarize later, the skill uses a local, deterministic Python scanner to extract structure, rank important files, and let the agent selectively open only the source it actually needs.
+With reducer
+
+User prompt
+   |
+   v
+repo-context map/query
+   |
+   +-- Git-aware file index
+   +-- Symbol extraction
+   +-- Dependency graph
+   +-- Task-aware ranking
+   +-- Top-K context
+   |
+   v
+Agent reads only relevant files in full
+   |
+   v
+Reasoning
+```
+
+The reducer is **deterministic preprocessing**. It does not call an LLM.
 
 ## What It Does
 
-| Input | Reducer output |
+| Operation | What the reducer does |
 |---|---|
-| Repository tree | Directory counts and project map |
-| Source files | Imports, classes, types, functions, exports and routes |
-| Dependency manifests | Framework and ecosystem hints |
-| Common entry files | Entry-point candidates |
-| Large codebase | Ranked list of important files |
-| Raw repository bytes | Approximate raw vs reduced context statistics |
-
-The scanner does **not** use an LLM. It runs locally and emits JSON.
+| Repository discovery | Uses Git when available so `.gitignore` is respected |
+| Project map | Detects languages, manifests, framework hints, entry points and workspaces |
+| Source structure | Extracts imports, classes, types, functions, exports and routes |
+| Python source | Uses the Python AST from the standard library |
+| Other languages | Uses lightweight language-aware structural extraction |
+| Dependency graph | Resolves local relative imports and reverse dependencies |
+| Ranking | Combines entry points, graph centrality, structure and task keywords |
+| Progressive context | Returns Top-K summaries instead of every scanned file |
+| Changed mode | Finds Git changes and nearby affected files |
+| Module mode | Narrows context to a subtree/workspace |
+| Cache | Reuses unchanged structural summaries across scans |
+| Safety | Skips secret-like paths, symlinks, generated code and oversized/binary files by default |
 
 ## Installation
 
-This repository is an [Agent Skill](https://skills.sh/) and can be installed directly from GitHub.
+### Agent Skill — recommended
 
-### Install to a supported coding agent
+Install directly from GitHub with the open Agent Skills CLI:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer
 ```
 
-### Install globally
+Install globally:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer -g
 ```
 
-### Claude Code
+Claude Code:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer -g -a claude-code
 ```
 
-### Codex
+Codex:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer -g -a codex
 ```
 
-### Cursor
+Cursor:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer -g -a cursor
 ```
 
-### Multiple agents
+Multiple agents:
 
 ```bash
 npx skills add tommy771004/agent-repo-context-reducer -g \
@@ -90,437 +130,455 @@ npx skills add tommy771004/agent-repo-context-reducer -g \
   -a cursor
 ```
 
+### Python CLI — optional
+
+Clone and run without installation:
+
+```bash
+git clone https://github.com/tommy771004/agent-repo-context-reducer.git
+cd agent-repo-context-reducer
+python scripts/repo_context.py map . --pretty
+```
+
+Or install the `repo-context` command from the repository:
+
+```bash
+python -m pip install git+https://github.com/tommy771004/agent-repo-context-reducer.git
+repo-context --version
+```
+
+The runtime has no third-party Python dependencies.
+
 ## Quick Start
 
-You install the skill once, then ask your coding agent normally:
+After installing the Skill, ask your agent normally:
 
 ```text
 Read this entire project and explain its architecture.
 ```
 
-The skill instructs the agent to prefer this flow:
-
-```text
-Repository
-    |
-    v
-Local deterministic scanner
-    |
-    v
-Compact project map
-    |
-    v
-AI agent reasoning
-    |
-    v
-Selective full-file reads
-```
-
-instead of:
-
-```text
-Repository
-    |
-    v
-Read every file into model context
-    |
-    v
-Summarize afterward
-```
-
-For direct CLI use:
+The Skill tells the agent to start with:
 
 ```bash
-python scripts/repo_context.py scan . --pretty
+python scripts/repo_context.py map <repo> --pretty
 ```
 
-Example:
+For a task-specific prompt:
+
+```text
+Find why payment succeeds but order status is sometimes not updated.
+```
+
+Prefer:
 
 ```bash
-python scripts/repo_context.py scan examples/sample-project --pretty
+python scripts/repo_context.py query <repo> \
+  "payment succeeds but order status is not updated" \
+  --top-k 20 --pretty
 ```
+
+Then inspect only the ranked files that are actually relevant.
 
 ## How It Works
 
-The reducer uses a three-level reading strategy.
+The core principle is **progressive disclosure of code context**.
 
-### Level 1 — Project Map
+### Level 0 — Index locally
 
-First identify the shape of the repository:
+The tool scans the repository without sending source to a model.
 
-- languages
-- manifests
-- framework hints
-- entry points
-- directory hot spots
-- important-file candidates
+When Git is available, file enumeration uses Git so ignored files are not indexed. Otherwise it falls back to a guarded filesystem walk.
 
-No model call is required.
+### Level 1 — Project map
 
-### Level 2 — Structural Context
-
-For source files, the scanner extracts lightweight structure such as:
-
-```text
-src/services/order.ts
-  imports:
-    ./payment
-
-  classes:
-    OrderService
-
-  functions:
-    createOrder(input)
-    cancelOrder(id)
+```bash
+repo-context map . --top-k 25
 ```
 
-The agent can use this map to decide where detailed reasoning should happen.
+Returns:
 
-### Level 3 — Full Source
+- languages
+- framework hints
+- manifests
+- workspaces / monorepo modules
+- entry points
+- directory hot spots
+- graph-central files
+- Top-K structural summaries
 
-Only after the project map is available should the agent read full source files relevant to the task.
+It intentionally does **not** return a summary for every file by default.
+
+### Level 2 — Task-aware query
+
+```bash
+repo-context query . "authentication refresh token failure" --top-k 20
+```
+
+Ranking combines:
+
+```text
+static structure
++ entry-point distance
++ imported-by/imports centrality
++ filename/symbol/import/query matches
+```
+
+This is deterministic lexical ranking. No embedding or model call is used.
+
+### Level 3 — Module / dependency drill-down
+
+```bash
+repo-context module . src/services --query "payment" --pretty
+repo-context deps . src/services/payment.ts --depth 2 --pretty
+```
+
+The agent can inspect one logical area without reopening the whole project map.
+
+### Level 4 — Full source only when necessary
+
+```bash
+repo-context inspect src/services/payment.ts --pretty
+```
+
+The structural map helps the agent decide whether a full source read is needed. Exact implementation reasoning still belongs to the coding agent.
+
+## Commands
+
+### `map`
+
+Create a compact Top-K repository map:
+
+```bash
+repo-context map . --pretty
+repo-context map . --top-k 15 --query "checkout payment" --pretty
+```
+
+`scan` is retained as a backward-compatible alias:
+
+```bash
+repo-context scan . --pretty
+```
+
+### `query`
+
+Rank files for the current task:
+
+```bash
+repo-context query . "login sometimes fails after token refresh" --top-k 20 --pretty
+```
+
+### `module`
+
+Focus on one subtree or monorepo module:
+
+```bash
+repo-context module . src/services --pretty
+repo-context module . packages/auth --query "session" --pretty
+```
+
+### `deps`
+
+Show dependency relationships:
+
+```bash
+repo-context deps . src/services/payment.ts --pretty
+repo-context deps . src/services/payment.ts --depth 2 --pretty
+```
+
+Output includes:
+
+- local imports
+- imported-by files
+- dependency neighborhood
+- unresolved local imports
+
+### `changed`
+
+Use Git changes as the seed set and include nearby dependencies/callers:
+
+```bash
+repo-context changed . --pretty
+```
+
+Compare against a base branch/ref:
+
+```bash
+repo-context changed . --base main --depth 2 --pretty
+```
+
+This is useful after the agent has already made edits: it avoids rebuilding reasoning around unrelated parts of the repository.
+
+### `inspect`
+
+Extract structural information from one file:
+
+```bash
+repo-context inspect src/services/order.ts --pretty
+```
+
+### Common scan controls
+
+```bash
+repo-context map . \
+  --top-k 25 \
+  --max-files 10000 \
+  --max-file-bytes 512000 \
+  --pretty
+```
+
+Additional controls:
+
+```text
+--no-cache            Disable incremental structural-summary cache
+--include-hidden      Include hidden files/directories where otherwise safe
+--include-generated   Include files detected as generated
+```
+
+## Task-Aware Ranking
+
+A globally important file is not always important for the current prompt.
 
 For example:
 
 ```text
-User asks about checkout failures
-        |
-        v
-repo-context scan .
-        |
-        +--> src/routes/order.ts
-        +--> src/services/order.ts
-        +--> src/services/payment.ts
-        |
-        v
-Agent reads these files in full
+src/main.ts                    globally important
+src/services/payment.ts        task important
+src/models/order-status.ts     task important
 ```
 
-The reducer is a **routing layer**, not a replacement for source-level reasoning.
-
-## Why This Can Reduce Tokens
-
-A model often needs to answer two different questions:
-
-1. **Where should I look?**
-2. **What does this code actually do?**
-
-Reading every file in full answers both questions at maximum context cost.
-
-This skill answers the first question with local code, then lets the model spend tokens only on the second question for a smaller set of files.
-
-Important: token savings depend on the repository and the agent workflow. The tool does **not** claim a fixed reduction percentage or billing reduction.
-
-The `stats` object uses a rough `UTF-8 bytes / 4` token estimate. This is useful for relative comparisons but is not a model tokenizer.
-
-## Commands
-
-### Scan a repository
+With:
 
 ```bash
-python scripts/repo_context.py scan .
+repo-context query . "payment completed order status" --top-k 10
 ```
 
-Pretty JSON:
+query matches in paths, symbols and imports receive additional weight on top of dependency-graph signals.
+
+This makes the reducer a navigation engine rather than only a source summarizer.
+
+## Dependency Graph
+
+Local relative imports are resolved against indexed source files when possible.
+
+```text
+src/index.js
+    |
+    v
+src/routes/order.js
+    |
+    v
+src/services/order.js
+    |
+    v
+src/services/payment.js
+```
+
+The graph is used for:
+
+- centrality ranking
+- entry-point distance
+- reverse dependency lookup
+- changed-file impact neighborhoods
+- task-aware file selection
+
+External package imports are retained separately from local edges.
+
+## Git-Aware Scanning
+
+Inside a Git repository, the reducer prefers:
 
 ```bash
-python scripts/repo_context.py scan . --pretty
+git ls-files --cached --others --exclude-standard
 ```
 
-Save the result:
+This means project `.gitignore` rules are respected automatically, including when scanning a subtree of the repository.
+
+If Git is not installed or the directory is not a Git repository, it safely falls back to a filesystem walk with common build/cache/vendor directories excluded.
+
+## Monorepo Support
+
+The project map detects common workspace layouts from:
+
+- `package.json` workspaces
+- `pnpm-workspace.yaml`
+- Cargo workspaces
+- `apps/`
+- `packages/`
+- `services/`
+
+Example:
+
+```text
+repo/
+├── apps/web
+├── apps/api
+├── packages/auth
+├── packages/ui
+└── services/payment
+```
+
+Use `module` to narrow the context:
 
 ```bash
-python scripts/repo_context.py scan . --pretty > /tmp/repo-context.json
+repo-context module . services/payment --pretty
 ```
 
-Scan a subtree:
+## Incremental Cache
+
+Structural summaries are cached in:
+
+```text
+.repo-context-cache/
+```
+
+Each entry is keyed by file path, modification time and size. Unchanged files do not need to be parsed again on the next scan.
+
+The cache contains structural summaries, not full source text.
+
+Disable it with:
 
 ```bash
-python scripts/repo_context.py scan src/services --pretty
+repo-context map . --no-cache
 ```
 
-Limit the scan:
+## Safety
 
-```bash
-python scripts/repo_context.py scan . \
-  --max-files 2000 \
-  --max-file-bytes 300000 \
-  --pretty
-```
+The reducer is designed to scan repositories without blindly dumping sensitive or noisy content into agent context.
 
-### Inspect one file structurally
+By default it skips:
 
-```bash
-python scripts/repo_context.py inspect src/services/order.ts --pretty
-```
+- `.env` and `.env.*`
+- filenames resembling `secret` / `credentials`
+- private key and certificate key files (`.pem`, `.key`, `.p12`, `.pfx`, etc.)
+- symlinks
+- binary files
+- oversized files
+- generated/minified code
+- common build/cache/vendor directories
 
-### Version
+`inspect` also refuses secret-like paths.
 
-```bash
-python scripts/repo_context.py --version
-```
+The tool does not attempt to print source contents in normal map/query/module/deps output.
 
-## Example Output
+See [SECURITY.md](SECURITY.md) for the trust model.
 
-```json
-{
-  "project": {
-    "root_name": "sample-project",
-    "files_scanned": 4,
-    "languages": {
-      "JavaScript": 3
-    },
-    "framework_hints": [
-      "Express"
-    ],
-    "manifests": [
-      "package.json"
-    ]
-  },
-  "entry_points": [
-    "src/index.js"
-  ],
-  "important_files": [
-    "src/index.js",
-    "src/services/order.js",
-    "package.json"
-  ],
-  "files": [],
-  "stats": {
-    "estimated_raw_tokens": 0,
-    "estimated_reduced_tokens": 0,
-    "estimated_reduction_ratio": 0.0
-  }
-}
-```
+## Context Savings
 
-The real `files` array contains compact per-file structural summaries.
+The `map` output includes a rough comparison between source bytes considered and output JSON bytes.
 
-## Supported Source Types
-
-The scanner currently recognizes common files from:
+Token estimates use:
 
 ```text
-Python
-JavaScript / TypeScript
-C#
-Rust
-Go
-Java / Kotlin
-Ruby
-PHP
-Swift
-C / C++
-Vue
-Svelte
-SQL
-Shell
-PowerShell
+UTF-8 bytes / 4
 ```
 
-Symbol extraction is strongest on conventional formatting. It intentionally avoids heavyweight parser dependencies.
+This is intentionally only a relative approximation. It is **not** a tokenizer and **not** a billing estimate.
 
-## What Gets Ignored
+A small repository can produce little or no savings because metadata has overhead. The design targets medium and large codebases where selective reading matters.
 
-Common generated and dependency directories are skipped automatically, including:
+The project does not claim a fixed token, latency or cost reduction percentage.
 
-```text
-.git
-node_modules
-vendor
-dist
-build
-target
-bin
-obj
-coverage
-.venv
-__pycache__
-.next
-.nuxt
-```
+## Supported Languages
 
-Large individual files are skipped according to `--max-file-bytes`.
+Structural extraction currently recognizes:
 
-## Agent Workflow
+- Python
+- JavaScript / TypeScript / JSX / TSX
+- C#
+- Rust
+- Go
+- Java
+- Kotlin
+- Ruby
+- PHP
+- Swift
+- C / C++
+- Vue
+- Svelte
+- SQL
+- shell / PowerShell
 
-A recommended workflow for Claude Code, Codex, Cursor and similar coding agents:
-
-```text
-User prompt
-   |
-   v
-Agent detects repository-wide analysis
-   |
-   v
-Run repo-context scan
-   |
-   v
-Read compact JSON map
-   |
-   +--> identify entry points
-   +--> identify core modules
-   +--> identify dependency boundaries
-   +--> identify relevant hot spots
-   |
-   v
-Read a small set of full source files
-   |
-   v
-Reason and answer
-```
-
-The critical ordering rule is:
-
-```text
-Generate/scan -> Reduce -> Read -> Reason
-```
-
-not:
-
-```text
-Read everything -> Reduce -> Reason
-```
-
-Once raw source has already entered model context, this tool cannot recover those tokens.
-
-## Output Contract
-
-Top-level fields:
-
-| Field | Meaning |
-|---|---|
-| `project` | Languages, manifests, framework hints and scan count |
-| `entry_points` | Likely application entry files |
-| `directories` | Highest-density scanned directories |
-| `important_files` | Heuristic navigation ranking |
-| `files` | Compact structural summaries |
-| `stats` | Approximate context-size statistics |
-
-Each source-file summary can include:
-
-```text
-path
-language
-bytes
-lines
-imports
-classes
-types
-functions
-exports
-routes
-importance
-```
-
-## Correctness Boundary
-
-The reducer intentionally separates **data reduction** from **reasoning**.
-
-It should determine:
-
-```text
-What files exist?
-What symbols are visible?
-What imports are declared?
-Which files look structurally important?
-```
-
-The AI agent should determine:
-
-```text
-Is this architecture good?
-Is this implementation correct?
-Where is the bug?
-Is there a security vulnerability?
-What should be refactored?
-```
-
-That boundary is deliberate.
-
-## Limitations
-
-The source extractor is heuristic, not a compiler-grade AST.
-
-It may miss or simplify:
-
-- multiline signatures
-- generated code
-- macros
-- metaprogramming
-- dynamic imports
-- framework-specific routing conventions
-- deeply nested language syntax
-
-The important-file score is a navigation heuristic, not a semantic importance proof.
-
-For compiler-accurate analysis, a future version can add optional Tree-sitter or language-server adapters while keeping the default zero-dependency path.
+Python uses the standard-library AST. Other languages currently use lightweight language-aware extraction and fall back conservatively when syntax is ambiguous.
 
 ## Repository Layout
 
 ```text
 agent-repo-context-reducer/
 ├── SKILL.md
+├── README.md
+├── SECURITY.md
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+├── pyproject.toml
+├── repo_context/
+│   ├── cli.py
+│   ├── scanner.py
+│   ├── parsers.py
+│   ├── graph.py
+│   ├── ranking.py
+│   ├── git_utils.py
+│   ├── workspaces.py
+│   ├── cache.py
+│   └── util.py
 ├── scripts/
 │   └── repo_context.py
 ├── references/
-│   └── design.md
+│   └── architecture.md
 ├── examples/
 │   └── sample-project/
-├── tests/
-│   └── test_repo_context.py
-├── .github/
-│   └── workflows/
-│       └── test.yml
-├── package.json
-├── README.md
-└── LICENSE
+└── tests/
+    └── test_repo_context.py
 ```
 
 ## Development
 
-Requirements:
-
-```text
-Python 3.10+
-```
-
-No runtime packages are required.
-
-Run tests:
+Run the test suite:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Run the demo:
+Run the sample project map:
 
 ```bash
-python scripts/repo_context.py scan examples/sample-project --pretty
+python scripts/repo_context.py map examples/sample-project --pretty
 ```
 
-## Roadmap
+Task-aware example:
 
-Potential next steps:
+```bash
+python scripts/repo_context.py query examples/sample-project \
+  "payment checkout" --top-k 5 --pretty
+```
 
-- Tree-sitter adapters for precise multi-language parsing
-- dependency graph output
-- symbol-reference graph
-- Git-aware changed-file prioritization
-- test/build output reduction
-- configurable importance rules
-- framework-specific extractors
-- incremental scan cache
-- compact Markdown output mode
-- optional findings reducer integration
+The repository intentionally keeps the runtime dependency-free so the Skill can work in coding-agent environments without a setup phase.
+
+## Design Boundary
+
+This project answers:
+
+> Where should the agent look next?
+
+It does **not** claim to answer:
+
+> Is this implementation correct?
+
+> Is this code secure?
+
+> What business behavior was intended?
+
+Those require reasoning over the selected full source, tests and runtime evidence.
 
 ## Philosophy
 
-**Code should do deterministic reduction. Models should do reasoning.**
+```text
+Discover with code.
+Rank with code.
+Reduce with code.
+Reason with the model.
+```
 
-If an agent needs to understand a large repository, the expensive model should not have to read every byte just to discover which files matter.
-
-Reduce first. Read selectively. Reason afterward.
+Do not spend expensive model context on repository navigation work that deterministic local tooling can do first.
 
 ## License
 

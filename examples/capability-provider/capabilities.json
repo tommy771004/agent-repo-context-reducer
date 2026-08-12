@@ -1,0 +1,15 @@
+{
+  "schema": "repo-context-capabilities/v1",
+  "provider": {
+    "name": "example-code-graph",
+    "version": "1.0.0"
+  },
+  "provides": [
+    {
+      "capability": "repository.graph",
+      "command": {
+        "argv": ["example-code-graph", "query", "--json"]
+      }
+    }
+  ]
+}
