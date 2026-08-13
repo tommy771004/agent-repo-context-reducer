@@ -8,7 +8,7 @@ import re
 import time
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 from .util import DEFAULT_IGNORE_DIRS, estimate_tokens_from_bytes, is_secret_path, safe_read_text
 
 KNOWLEDGE_SUFFIXES = {".md", ".mdx", ".txt", ".rst"}
@@ -55,6 +55,7 @@ def build_knowledge_index(root: pathlib.Path | str, max_files: int = 1000, max_f
             break
     payload = {"schema": "repo-context-knowledge/v1", "root": str(repo), "indexed_at": int(time.time()), "documents": docs}
     out = state_dir(repo) / "knowledge.json"
+    prepare_state_dir(repo)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return {"path": str(out), "documents": len(docs), "estimated_tokens_indexed": sum(d["estimated_tokens"] for d in docs)}

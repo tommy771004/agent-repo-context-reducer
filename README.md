@@ -71,6 +71,15 @@ Reasoning
 
 The reducer is **deterministic preprocessing**. It does not call an LLM.
 
+## Two Product Surfaces
+
+This repository deliberately exposes two separate surfaces:
+
+1. **Core Reducer — default product surface.** Repository discovery, static index/graph, symbol extraction, provider reuse, context ranking, deduplication, session state and bounded context emission.
+2. **Advisory Harness Planner — optional.** Complexity/risk/model-tier suggestions, lane budgets, dependency-aware schedules, quality-gate packets and bounded retry policy. These modules **do not spawn agents or switch models by themselves**. Execution requires the host or an external provider.
+
+If your goal is only to reduce repository context, you can ignore the advisory harness commands entirely.
+
 ## What It Does
 
 | Operation | What the reducer does |
@@ -88,9 +97,9 @@ The reducer is **deterministic preprocessing**. It does not call an LLM.
 | Cache | Reuses unchanged structural summaries across scans |
 | Safety | Skips secret-like paths, symlinks, generated code and oversized/binary files by default |
 
-## Harness Optimization in v1.3
+## Optional Advisory Harness Planner
 
-The reducer now treats repository context as one part of a larger **information orchestration** problem. It does not hard-code Kimi, OpenHands, GraphRAG, or any other stack. Instead it resolves capabilities by layer and reuses a compatible trusted provider when one exists.
+The optional planner treats repository context as one part of a larger **information orchestration** problem. It does not hard-code Kimi, OpenHands, GraphRAG, or any other stack. Instead it resolves capabilities by layer and reuses a compatible trusted provider when one exists.
 
 ```text
 User task
@@ -177,6 +186,18 @@ This avoids rebuilding a second graph merely because an external knowledge or co
 
 Provider manifest templates are included under `examples/provider-layers/`. They intentionally omit executable commands: copy a template into `.repo-context/providers.d/`, add a real adapter for the installed tool, and trust it only after verifying the command contract.
 
+## v1.4 Architecture Hardening
+
+v1.4 focuses on audit-driven correctness and maintainability rather than adding another orchestration layer:
+
+- project-scope host shortcuts are portable and never bake a developer-specific absolute path into committed files;
+- committed Claude/Codex shortcut snapshots are generated from the same renderer and protected by drift tests;
+- runtime state and structural cache live under one `.repo-context/` tree;
+- `capabilities.json` is generated from runtime `NATIVE_CAPABILITIES` and checked in tests;
+- `map` and `query` have distinct output contracts;
+- `sync` is described truthfully as a cache-aware refresh: source parsing can be reused, while graph/ranking are rebuilt;
+- CLI parsing, context orchestration and repository command handling are split into separate modules.
+
 ## Short Reducer Commands
 
 The public interface is intentionally small. Humans use intent commands; the Skill chooses workflows; the shared runtime handles provider detection, reuse, fallback, graph/index, deduplication and budgets.
@@ -199,10 +220,10 @@ Install the project-local shortcuts once:
 repo-context host-install --host claude-code --scope project --repo .
 ```
 
-Or, when using the bundled Skill without installing the Python package:
+Project-scope shortcuts intentionally contain the portable command `repo-context`, so every machine that uses committed project shortcuts must have the CLI on `PATH`. If you are running only from a source/Skill checkout and do not want to install the CLI, use a machine-local global shortcut instead:
 
 ```bash
-python scripts/repo_context.py host-install --host claude-code --scope project --repo .
+python3 scripts/repo_context.py host-install --host claude-code --scope global --repo .
 ```
 
 Then use, for example:
@@ -288,17 +309,19 @@ Clone and run without installation:
 ```bash
 git clone https://github.com/tommy771004/agent-repo-context-reducer.git
 cd agent-repo-context-reducer
-python scripts/repo_context.py map . --pretty
+python3 scripts/repo_context.py map . --pretty
 ```
 
 Or install the `repo-context` command from the repository:
 
 ```bash
-python -m pip install git+https://github.com/tommy771004/agent-repo-context-reducer.git
+python3 -m pip install git+https://github.com/tommy771004/agent-repo-context-reducer.git
 repo-context --version
 ```
 
 The runtime has no third-party Python dependencies.
+
+**Distribution boundary:** `npx skills add` installs the Skill content (`SKILL.md`, references and bundled scripts). `pip`/`pipx` installs the Python runtime and `repo-context` console command. The wheel is intentionally a runtime distribution; it is not a replacement for installing the Skill documentation tree.
 
 ## Quick Start
 
@@ -634,23 +657,42 @@ Use `module` to narrow the context:
 repo-context module . services/payment --pretty
 ```
 
-## Incremental Cache
+## Persistent State and Cache
 
-Structural summaries are cached in:
+Commands that need the native repository index are **locally stateful by default**. On first write the reducer uses one state tree:
 
 ```text
-.repo-context-cache/
+.repo-context/
+├── index.json
+├── cache/summaries-v4.json
+├── sessions/
+├── runs/
+├── budgets/
+├── artifacts/
+└── provider-health.json / providers.json / knowledge.json / ...
 ```
 
-Each entry is keyed by file path, modification time and size. Unchanged files do not need to be parsed again on the next scan.
+The first successful state write best-effort appends `.repo-context/` to the repository `.gitignore`. It also keeps the legacy `.repo-context-cache/` ignore entry for upgrades from pre-1.4 releases.
 
-The cache contains structural summaries, not full source text.
+The summary cache is versioned. When the structural parsers change, the version is bumped and caches written by an earlier release are **discarded rather than migrated** — a summary produced by an older parser is stale by definition, and the cache key (path + mtime + size) would otherwise keep serving it for files that never changed. Stale cache files are removed on the next successful write.
 
-Disable it with:
+`map`, `query`, `module`, `deps`, `callers`, `impact`, `changed`, `admit`, and `context` normally refresh/load the persistent index, so they can write `.repo-context/index.json` and cache metadata even though their **model-facing output is read-only repository analysis**.
+
+`sync` is a **cache-aware refresh**, not a fully incremental graph update. Unchanged source summaries can be reused, but file enumeration, dependency graph construction, ranking and the persistent JSON write are rebuilt.
+
+Use an already-existing index without refreshing it:
+
+```bash
+repo-context map . --no-sync
+```
+
+`--no-sync` never creates a missing index; run `repo-context index .` first. Disable structural-summary caching with:
 
 ```bash
 repo-context map . --no-cache
 ```
+
+The cache stores structural summaries, not full source text.
 
 ## Safety
 
@@ -691,87 +733,87 @@ The project does not claim a fixed token, latency or cost reduction percentage.
 
 ## Supported Languages
 
-Structural extraction currently recognizes:
+Extraction depth is **not uniform**. Language recognition (for the language census, indexing and ranking) is broader than structural extraction, and structural extraction is what feeds the dependency graph and symbol-level reading.
 
-- Python
-- JavaScript / TypeScript / JSX / TSX
-- C#
-- Rust
-- Go
-- Java
-- Kotlin
-- Ruby
-- PHP
-- Swift
-- C / C++
-- Vue
-- Svelte
-- SQL
-- shell / PowerShell
+| Tier | Languages | Imports | Classes / types | Functions | `symbol` reading |
+|---|---|---|---|---|---|
+| Full AST | Python | yes | yes | yes | yes |
+| Language-aware heuristic | JavaScript, TypeScript, JSX, TSX, Vue, Svelte, Rust, Go, C#, Java, Kotlin, C, C++, shell, PowerShell | yes | yes | yes | yes |
+| Objects instead of imports | SQL | n/a | tables/views/types | procedures/functions | yes |
+| Partial | Swift, PHP | **no** | yes | yes | yes |
+| Partial | Ruby | **no** | yes | **no** | classes only |
 
-Python uses the standard-library AST. Other languages currently use lightweight language-aware extraction and fall back conservatively when syntax is ambiguous.
+Python uses the standard-library AST. Every other language uses regex-based, language-aware extraction that falls back conservatively when syntax is ambiguous.
+
+**Import resolution details:**
+
+- C/C++ `#include "local.h"` is treated as project-local and can resolve to a graph edge; `#include <system.h>` is kept as an external import. Declarations without a body are not reported as functions.
+- shell `source ./lib.sh` and PowerShell `. .\helper.ps1` resolve to graph edges (backslash paths are normalized); `Import-Module Az` stays external.
+- SQL has no import concept, so SQL files never produce dependency edges. `CREATE TABLE/VIEW/TYPE` become types and `CREATE PROCEDURE/FUNCTION` become functions.
+- Swift, PHP and Ruby currently have no import extraction, so they contribute **no local dependency-graph edges**.
+
+**What the lower tiers mean in practice:** every recognized file is discovered, respected by `.gitignore`, counted in the language census and ranked; but where imports are not extracted, ranking leans on path/filename signals rather than graph centrality. `repo-context symbol` can only read symbols that were extracted — when a symbol is missing it returns `Symbol not found` and progressive disclosure falls back to a full-file read.
 
 ## Repository Layout
+
+The layout is grouped by responsibility instead of duplicating an exhaustive module list in documentation:
 
 ```text
 agent-repo-context-reducer/
 ├── SKILL.md
-├── README.md
-├── SECURITY.md
-├── CONTRIBUTING.md
-├── CHANGELOG.md
-├── pyproject.toml
+├── capabilities.json              # generated from runtime capability source of truth
+├── .claude/commands/              # generated/readable Claude shortcut snapshots
+├── adapters/codex/                # generated/readable Codex Skill snapshots
 ├── repo_context/
-│   ├── cli.py
-│   ├── scanner.py
-│   ├── parsers.py
-│   ├── graph.py
-│   ├── ranking.py
-│   ├── git_utils.py
-│   ├── workspaces.py
-│   ├── cache.py
-│   ├── complexity.py
-│   ├── risk.py
-│   ├── model_router.py
-│   ├── lane_budget.py
-│   ├── scheduler.py
-│   ├── grader.py
-│   ├── retry_policy.py
-│   ├── handoff.py
-│   ├── artifact_store.py
-│   ├── knowledge.py
-│   ├── orchestration.py
-│   └── util.py
+│   ├── cli.py                     # thin dispatch / output / error boundary
+│   ├── cli_parser.py              # argparse registration
+│   ├── command_facade.py          # reducer-* single source of truth
+│   ├── host_adapters.py           # host shortcut renderer/installer
+│   ├── context_command.py         # context orchestration handler
+│   ├── repository_commands.py     # map/query/deps/impact handlers
+│   ├── scanner.py / parsers.py / symbols.py / graph.py / ranking.py
+│   ├── indexer.py / index_runtime.py / storage.py / cache.py
+│   ├── capabilities.py / delegate.py / provider_*.py / config.py
+│   ├── context_planner.py / admission.py / ledger.py / lifecycle.py / voi.py
+│   └── complexity.py / risk.py / model_router.py / scheduler.py / grader.py / ...
 ├── scripts/
-│   └── repo_context.py
+│   ├── repo_context.py
+│   └── generate_capabilities.py
 ├── references/
-│   ├── architecture.md
+│   ├── overview.md
+│   ├── architecture/
+│   ├── workflows/
+│   ├── policies/
+│   ├── providers/
 │   ├── harness/
-│   └── providers/
+│   ├── observability/
+│   └── evaluation/
+├── docs/audits/                   # architecture audit history/remediation evidence
 ├── examples/
-│   └── sample-project/
-└── tests/
-    └── test_repo_context.py
+├── .github/workflows/test.yml
+└── tests/                         # reducer, harness, facade, manifest and version regressions
 ```
+
+`repo_context/` remains dependency-acyclic; `cli.py` is no longer the home of parser registration or context/repository business logic.
 
 ## Development
 
 Run the test suite:
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```
 
 Run the sample project map:
 
 ```bash
-python scripts/repo_context.py map examples/sample-project --pretty
+python3 scripts/repo_context.py map examples/sample-project --pretty
 ```
 
 Task-aware example:
 
 ```bash
-python scripts/repo_context.py query examples/sample-project \
+python3 scripts/repo_context.py query examples/sample-project \
   "payment checkout" --top-k 5 --pretty
 ```
 

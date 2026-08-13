@@ -6,270 +6,37 @@ import pathlib
 import sys
 from typing import Any
 
-from . import __version__
-from .admission import evaluate_read
 from .attribution import analyze_context_usage
 from .benchmark import benchmark_tasks, load_tasks
 from .artifact_store import ArtifactStore
 from .complexity import classify_complexity
-from .command_facade import FACADES, get_facade, list_facades
+from .command_facade import get_facade, list_facades
 from .capabilities import detect_providers, doctor, resolve_capability
-from .context_planner import build_context
+from .context_command import execute_context
+from .index_runtime import index_kwargs, persistent_index
+from .repository_commands import REPOSITORY_VIEW_COMMANDS, handle_repository_view
+from .repository_runtime import inspect_file, symbol_with_ledger as _symbol_with_ledger
 from .config import load_config, trust_provider, prefer_provider
 from .delegate import delegate_capability
-from .external_context import load_external_file, canonicalize_external
+from .external_context import load_external_file
 from .fanout import recommend_fanout
-from .git_utils import changed_files
 from .handoff import reduce_handoff
 from .grader import build_grade_packet, evaluate_grade
-from .graph import neighborhood
 from .host_adapters import install_host_commands, host_status
 from .indexer import build_persistent, ensure_index, index_status
-from .ledger import SessionLedger
 from .knowledge import build_knowledge_index, search_knowledge, knowledge_status
 from .lifecycle import ContextLifecycle
-from .parsers import summarize_source
 from .orchestration import plan_harness
 from .provider_health import ProviderHealth
 from .retry_policy import decide_retry
-from .ranking import rank_files
 from .router import route_task
-from .scanner import changed_view, dependency_view, module_map, project_map
 from .scheduler import build_schedule
-from .symbols import read_symbol
 from .task_budget import BudgetLimits, TaskBudget
 from .tool_policy import classify_command
-from .trace import Trace, new_run_id, replay_summary
-from .util import SOURCE_EXTENSIONS, estimate_tokens_from_bytes, safe_read_text, is_secret_path
+from .trace import replay_summary
 
 
-def _add_common(p: argparse.ArgumentParser) -> None:
-    p.add_argument("path", nargs="?", default=".")
-    p.add_argument("--max-files", type=int, default=10000)
-    p.add_argument("--max-file-bytes", type=int, default=512_000)
-    p.add_argument("--include-hidden", action="store_true")
-    p.add_argument("--include-generated", action="store_true")
-    p.add_argument("--no-cache", action="store_true")
-    p.add_argument("--no-sync", action="store_true", help="Use existing persistent index without refreshing it")
-    p.add_argument("--pretty", action="store_true")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="repo-context", description="Provider-aware repository context harness for AI coding agents.")
-    parser.add_argument("--version", action="version", version=f"repo-context {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    index = sub.add_parser("index", help="Build/rebuild the native persistent repository graph index")
-    _add_common(index)
-    sync = sub.add_parser("sync", help="Incrementally refresh the native persistent index")
-    _add_common(sync)
-    status = sub.add_parser("status", help="Show native persistent index status")
-    status.add_argument("path", nargs="?", default="."); status.add_argument("--pretty", action="store_true")
-
-    detect = sub.add_parser("detect", help="Lazy-detect compatible Skills/CLIs and native fallbacks")
-    detect.add_argument("path", nargs="?", default="."); detect.add_argument("--capability", action="append", default=[])
-    detect.add_argument("--no-cache", action="store_true"); detect.add_argument("--pretty", action="store_true")
-    doc = sub.add_parser("doctor", help="Detect capability overlap and provider conflicts")
-    doc.add_argument("path", nargs="?", default="."); doc.add_argument("--pretty", action="store_true")
-    resolve = sub.add_parser("resolve", help="Resolve one capability to a provider; native is fallback")
-    resolve.add_argument("capability"); resolve.add_argument("path", nargs="?", default=".")
-    resolve.add_argument("--allow-external-commands", action="store_true"); resolve.add_argument("--pretty", action="store_true")
-    delegate = sub.add_parser("delegate", help="Invoke an explicitly authorized compatible provider adapter without a shell")
-    delegate.add_argument("capability"); delegate.add_argument("task"); delegate.add_argument("path", nargs="?", default=".")
-    delegate.add_argument("--allow-external-commands", action="store_true"); delegate.add_argument("--timeout", type=int, default=30); delegate.add_argument("--pretty", action="store_true")
-    phealth = sub.add_parser("provider-health", help="Show observed provider success/latency health")
-    phealth.add_argument("path", nargs="?", default="."); phealth.add_argument("--provider"); phealth.add_argument("--pretty", action="store_true")
-    ptrust = sub.add_parser("provider-trust", help="Persist trust for a machine-invokable external provider")
-    ptrust.add_argument("provider_id"); ptrust.add_argument("path", nargs="?", default="."); ptrust.add_argument("--pretty", action="store_true")
-    puntrust = sub.add_parser("provider-untrust", help="Remove persisted trust for an external provider")
-    puntrust.add_argument("provider_id"); puntrust.add_argument("path", nargs="?", default="."); puntrust.add_argument("--pretty", action="store_true")
-    ppref = sub.add_parser("provider-prefer", help="Prefer one trusted provider for a capability")
-    ppref.add_argument("capability"); ppref.add_argument("provider_id"); ppref.add_argument("path", nargs="?", default="."); ppref.add_argument("--pretty", action="store_true")
-    pcfg = sub.add_parser("provider-config", help="Show provider trust/preferences")
-    pcfg.add_argument("path", nargs="?", default="."); pcfg.add_argument("--pretty", action="store_true")
-
-    route = sub.add_parser("route", help="Classify a task and return workflow, policies, and required capabilities")
-    route.add_argument("task"); route.add_argument("--repo", default="."); route.add_argument("--no-resolve", action="store_true")
-    route.add_argument("--pretty", action="store_true")
-
-    context = sub.add_parser("context", help="Build a provider-aware, token-budgeted context pack")
-    _add_common(context); context.add_argument("task"); context.add_argument("--budget", type=int, default=6000)
-    context.add_argument("--session", default="default"); context.add_argument("--run-id")
-    context.add_argument("--max-context-files", type=int, default=12); context.add_argument("--max-symbols", type=int, default=20)
-    context.add_argument("--structure-only", action="store_true")
-    context.add_argument("--external-only", action="store_true", help="Use ingested external provider blocks without building the native repo index")
-    context.add_argument("--external", action="append", default=[], metavar="PROVIDER:JSON",
-                         help="Ingest external provider JSON through the context gateway before reasoning")
-    context.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"],
-                         help="Force a workflow intent instead of heuristic task routing")
-
-    run = sub.add_parser("run", help="Run a short reducer-* intent facade")
-    run.add_argument("facade", choices=list(FACADES))
-    run.add_argument("task", nargs="?", default="")
-    run.add_argument("--repo", default=".")
-    run.add_argument("--budget", type=int)
-    run.add_argument("--session", default="default")
-    run.add_argument("--pretty", action="store_true")
-
-    commands = sub.add_parser("commands", help="List the short reducer-* command facades")
-    commands.add_argument("--pretty", action="store_true")
-
-    hinstall = sub.add_parser("host-install", help="Install reducer-* shortcuts for Claude Code or Codex")
-    hinstall.add_argument("--host", required=True, choices=["claude-code", "codex"])
-    hinstall.add_argument("--scope", choices=["project", "global"], default="project")
-    hinstall.add_argument("--repo", default=".")
-    hinstall.add_argument("--dry-run", action="store_true")
-    hinstall.add_argument("--pretty", action="store_true")
-
-    hstatus = sub.add_parser("host-status", help="Show installed reducer-* host shortcuts")
-    hstatus.add_argument("--host", required=True, choices=["claude-code", "codex"])
-    hstatus.add_argument("--scope", choices=["project", "global"], default="project")
-    hstatus.add_argument("--repo", default=".")
-    hstatus.add_argument("--pretty", action="store_true")
-
-    complexity = sub.add_parser("complexity", help="Heuristically classify task complexity before deciding whether multi-agent work is justified")
-    complexity.add_argument("task"); complexity.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); complexity.add_argument("--pretty", action="store_true")
-
-    plan = sub.add_parser("plan", help="Build a provider-aware harness plan without executing agents")
-    plan.add_argument("task"); plan.add_argument("--repo", default="."); plan.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"])
-    plan.add_argument("--context-budget", type=int, default=12000); plan.add_argument("--output-budget", type=int, default=4000); plan.add_argument("--model-calls", type=int, default=10); plan.add_argument("--pretty", action="store_true")
-
-    schedule = sub.add_parser("schedule", help="Build a dependency-aware agent schedule; independent stages only may run in parallel")
-    schedule.add_argument("task"); schedule.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); schedule.add_argument("--pretty", action="store_true")
-
-    quality = sub.add_parser("quality", help="Advanced runtime API: build a reduced grader packet or validate a grader result")
-    quality.add_argument("action", choices=["packet", "evaluate"]); quality.add_argument("value"); quality.add_argument("input", nargs="?")
-    quality.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); quality.add_argument("--artifact-id")
-    quality.add_argument("--risk-level", choices=["low", "medium", "high", "critical"]); quality.add_argument("--pretty", action="store_true")
-
-    retry = sub.add_parser("retry-decision", help="Advanced runtime API: apply the bounded reject/retry/escalation policy")
-    retry.add_argument("decision", choices=["pass", "reject", "uncertain"]); retry.add_argument("--attempt", type=int, required=True)
-    retry.add_argument("--worker-tier", choices=["cheap", "standard", "strong"], required=True)
-    retry.add_argument("--risk-level", choices=["low", "medium", "high", "critical"], required=True)
-    retry.add_argument("--complexity-level", choices=["trivial", "focused", "complex", "autonomous"], required=True)
-    retry.add_argument("--force-escalation", action="store_true"); retry.add_argument("--pretty", action="store_true")
-
-    handoff = sub.add_parser("handoff", help="Reduce one agent result into a bounded structured handoff for another agent")
-    handoff.add_argument("from_role"); handoff.add_argument("to_role"); handoff.add_argument("input")
-    handoff.add_argument("--repo", default="."); handoff.add_argument("--task", default=""); handoff.add_argument("--store-artifact", action="store_true"); handoff.add_argument("--pretty", action="store_true")
-
-    artifact = sub.add_parser("artifact", help="Store large agent/tool outputs outside model context and retrieve compact metadata")
-    artifact.add_argument("action", choices=["put", "get", "list"]); artifact.add_argument("value", nargs="?")
-    artifact.add_argument("--repo", default="."); artifact.add_argument("--kind", default="agent-output"); artifact.add_argument("--producer", default="unknown")
-    artifact.add_argument("--payload", action="store_true", help="Include full payload when reading an artifact"); artifact.add_argument("--limit", type=int, default=50); artifact.add_argument("--pretty", action="store_true")
-
-    knowledge = sub.add_parser("knowledge", help="Local knowledge-memory fallback for docs/ADR text; external knowledge providers remain preferred when compatible")
-    knowledge.add_argument("action", choices=["index", "search", "status"]); knowledge.add_argument("query", nargs="?")
-    knowledge.add_argument("--repo", default="."); knowledge.add_argument("--top-k", type=int, default=8); knowledge.add_argument("--budget", type=int, default=1800); knowledge.add_argument("--pretty", action="store_true")
-
-    ingest = sub.add_parser("ingest", help="Normalize/deduplicate an external provider JSON result")
-    ingest.add_argument("provider"); ingest.add_argument("json_file"); ingest.add_argument("--pretty", action="store_true")
-
-    map_p = sub.add_parser("map", help="Emit a compact Top-K native project map")
-    _add_common(map_p); map_p.add_argument("--top-k", type=int, default=25); map_p.add_argument("--query")
-    scan = sub.add_parser("scan", help="Backward-compatible alias for map")
-    _add_common(scan); scan.add_argument("--top-k", type=int, default=25); scan.add_argument("--query")
-    query = sub.add_parser("query", help="Rank repository files for a task/query")
-    _add_common(query); query.add_argument("query"); query.add_argument("--top-k", type=int, default=20)
-    module = sub.add_parser("module", help="Emit structural context for one module/subtree")
-    _add_common(module); module.add_argument("module"); module.add_argument("--top-k", type=int, default=30); module.add_argument("--query")
-    deps = sub.add_parser("deps", help="Show resolved static imports/imported-by neighborhood for a file")
-    _add_common(deps); deps.add_argument("file"); deps.add_argument("--depth", type=int, default=1)
-    callers = sub.add_parser("callers", help="Show files that statically import a file; not a runtime call graph")
-    _add_common(callers); callers.add_argument("file")
-    impact = sub.add_parser("impact", help="Show static dependency-neighborhood impact for a file")
-    _add_common(impact); impact.add_argument("file"); impact.add_argument("--depth", type=int, default=2); impact.add_argument("--top-k", type=int, default=40)
-    changed = sub.add_parser("changed", help="Show changed files and static dependency-neighborhood impact")
-    _add_common(changed); changed.add_argument("--base"); changed.add_argument("--depth", type=int, default=1); changed.add_argument("--top-k", type=int, default=40)
-
-    symbol = sub.add_parser("symbol", help="Read one symbol instead of an entire source file")
-    symbol.add_argument("path", help="Repository root"); symbol.add_argument("file"); symbol.add_argument("symbol")
-    symbol.add_argument("--session", default="default"); symbol.add_argument("--max-file-bytes", type=int, default=2_000_000); symbol.add_argument("--pretty", action="store_true")
-    admit = sub.add_parser("admit", help="Evaluate whether a full file read should be admitted by policy")
-    _add_common(admit); admit.add_argument("file"); admit.add_argument("task"); admit.add_argument("--session", default="default"); admit.add_argument("--requested", choices=["full", "structure", "symbol"], default="full")
-    inspect = sub.add_parser("inspect", help="Extract structural metadata from one source file")
-    inspect.add_argument("path"); inspect.add_argument("--max-file-bytes", type=int, default=1_000_000); inspect.add_argument("--pretty", action="store_true")
-
-    tool = sub.add_parser("tool-policy", help="Classify shell/tool risk before execution")
-    tool.add_argument("command_line"); tool.add_argument("--pretty", action="store_true")
-    fan = sub.add_parser("fanout", help="Recommend adaptive subagent fan-out/backpressure")
-    fan.add_argument("--coverage", type=float); fan.add_argument("--unresolved", type=int, default=1)
-    fan.add_argument("--used-subagents", type=int, default=0); fan.add_argument("--max-subagents", type=int, default=4)
-    fan.add_argument("--concurrency", type=int, default=2); fan.add_argument("--pretty", action="store_true")
-
-    budget = sub.add_parser("budget", help="Create, inspect, or consume a task-wide harness budget")
-    budget.add_argument("action", choices=["init", "status", "consume"]); budget.add_argument("run_id"); budget.add_argument("path", nargs="?", default=".")
-    budget.add_argument("--context-tokens", type=int, default=0); budget.add_argument("--output-tokens", type=int, default=0)
-    budget.add_argument("--tool-calls", type=int, default=0); budget.add_argument("--model-calls", type=int, default=0); budget.add_argument("--subagents", type=int, default=0)
-    budget.add_argument("--limit-context", type=int, default=12000); budget.add_argument("--limit-output", type=int, default=4000)
-    budget.add_argument("--limit-tools", type=int, default=30); budget.add_argument("--limit-models", type=int, default=10)
-    budget.add_argument("--limit-subagents", type=int, default=4); budget.add_argument("--limit-wall", type=int, default=900); budget.add_argument("--pretty", action="store_true")
-
-    life = sub.add_parser("lifecycle", help="Inspect or demote context lifecycle tiers")
-    life.add_argument("action", choices=["status", "evict"]); life.add_argument("path", nargs="?", default=".")
-    life.add_argument("--session", default="default"); life.add_argument("--max-hot-tokens", type=int, default=6000); life.add_argument("--pretty", action="store_true")
-
-    replay = sub.add_parser("replay", help="Read an observational run trace without re-executing tools")
-    replay.add_argument("run_id"); replay.add_argument("path", nargs="?", default="."); replay.add_argument("--pretty", action="store_true")
-
-    bench = sub.add_parser("benchmark", help="Measure context selection/token reduction; optional expected-path recall")
-    bench.add_argument("tasks_json"); bench.add_argument("path", nargs="?", default="."); bench.add_argument("--budget", type=int, default=6000); bench.add_argument("--pretty", action="store_true")
-
-    attr = sub.add_parser("analyze-context", help="Heuristically identify possibly unused context after an answer")
-    attr.add_argument("context_json"); attr.add_argument("answer_file"); attr.add_argument("--pretty", action="store_true")
-    return parser
-
-
-def _index_kwargs(args: argparse.Namespace) -> dict[str, Any]:
-    return dict(max_files=args.max_files, max_file_bytes=args.max_file_bytes,
-                include_hidden=args.include_hidden, use_cache=not args.no_cache,
-                include_generated=args.include_generated)
-
-
-def _persistent(args: argparse.Namespace) -> dict[str, Any]:
-    return ensure_index(args.path, sync=not args.no_sync, **_index_kwargs(args))["index"]
-
-
-def inspect_file(path: str, max_bytes: int) -> dict[str, Any]:
-    p = pathlib.Path(path).expanduser().absolute()
-    if is_secret_path(p.as_posix()):
-        raise ValueError(f"Refusing to inspect secret-like path: {p}")
-    if not p.is_file():
-        raise ValueError(f"Not a file: {p}")
-    text, size, reason = safe_read_text(p, max_bytes)
-    if text is None:
-        raise ValueError(f"File unavailable ({reason}): {p}")
-    summary = summarize_source(p.name, text)
-    return {"path": str(p), "language": SOURCE_EXTENSIONS.get(p.suffix.lower()), "bytes": size,
-            **summary, "estimated_raw_tokens": estimate_tokens_from_bytes(size)}
-
-
-def _symbol_with_ledger(root: pathlib.Path, file: str, name: str, session: str, max_bytes: int) -> dict[str, Any]:
-    item = read_symbol(root, file, name, max_file_bytes=max_bytes)
-    ledger = SessionLedger(root, session=session)
-    key = f"symbol:{item['path']}:{item['name']}:{item.get('start_line')}"
-    comparison = ledger.compare(key, item["fingerprint"], item["content"])
-    if comparison["state"] == "unchanged":
-        result = {k: v for k, v in item.items() if k != "content"}
-        result.update({"content_mode": "omitted-unchanged", "session": session, "already_seen": True})
-    elif comparison["state"] == "changed" and comparison.get("diff") and len(comparison["diff"]) < len(item["content"]):
-        result = {**item, "content": comparison["diff"], "content_mode": "delta", "session": session, "already_seen": False}
-    else:
-        result = {**item, "content_mode": "full-symbol", "session": session, "already_seen": False}
-    ledger.record(key, item["fingerprint"], item["content"])
-    ledger.save()
-    return result
-
-
-def _external_blocks(specs: list[str]) -> list[dict[str, Any]]:
-    blocks: list[dict[str, Any]] = []
-    for spec in specs:
-        if ":" not in spec:
-            raise ValueError("--external expects PROVIDER:JSON_FILE")
-        provider, raw_path = spec.split(":", 1)
-        p = pathlib.Path(raw_path).expanduser()
-        blocks.extend(load_external_file(p, provider))
-    return blocks
+from .cli_parser import build_parser
 
 
 def _budget_for(args: argparse.Namespace) -> TaskBudget:
@@ -277,50 +44,6 @@ def _budget_for(args: argparse.Namespace) -> TaskBudget:
                           tool_calls=args.limit_tools, model_calls=args.limit_models,
                           subagents=args.limit_subagents, wall_seconds=args.limit_wall)
     return TaskBudget(pathlib.Path(args.path).resolve(), args.run_id, limits=limits)
-
-
-def _empty_index(root: pathlib.Path) -> dict[str, Any]:
-    return {
-        "root": str(root), "files": [], "by_path": {},
-        "graph": {"edges": {}, "reverse": {}, "degree": {}},
-        "entry_points": [], "manifests": [], "languages": {}, "framework_hints": [],
-        "directories": [], "workspaces": [], "stats": {"files_scanned": 0}, "listing_mode": "external-only",
-    }
-
-
-def _auto_delegate_trusted(root: pathlib.Path, route: dict[str, Any], task: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], bool]:
-    blocks: list[dict[str, Any]] = []
-    attempts: list[dict[str, Any]] = []
-    native_needed = False
-    native_repo_caps = {
-        "repository.index", "repository.graph", "repository.symbols", "repository.imports",
-        "repository.references", "repository.impact", "code.read-symbol"
-    }
-    seen_exec: set[tuple[str, str]] = set()
-    for cap, resolution in (route.get("provider_resolution") or {}).items():
-        selected = resolution.get("selected") or {}
-        if selected.get("source_type") == "native":
-            if cap in native_repo_caps:
-                native_needed = True
-            continue
-        if selected.get("source_type") == "cli":
-            continue
-        if not resolution.get("trusted_selected"):
-            if cap in native_repo_caps:
-                native_needed = True
-            continue
-        command_key = json.dumps((selected.get("commands") or {}).get(cap), sort_keys=True, ensure_ascii=False)
-        dedup_key = (selected.get("id", ""), command_key)
-        if dedup_key in seen_exec:
-            continue
-        seen_exec.add(dedup_key)
-        delegated = delegate_capability(root, cap, task, allow_external_commands=False)
-        attempts.append({"capability": cap, "provider": selected.get("id"), "delegated": delegated.get("delegated"), "reason": delegated.get("reason")})
-        if delegated.get("delegated"):
-            blocks.extend(delegated.get("blocks", []))
-        elif cap in native_repo_caps:
-            native_needed = True
-    return blocks, attempts, native_needed
 
 
 def _load_user_payload(value: str) -> Any:
@@ -441,10 +164,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "status":
             result = index_status(args.path)
         elif args.command == "index":
-            built = build_persistent(args.path, **_index_kwargs(args)); idx = built["index"]
+            built = build_persistent(args.path, **index_kwargs(args)); idx = built["index"]
             result = {"mode": built["mode"], "index_path": built["path"], **index_status(args.path), "stats": idx.get("stats", {})}
         elif args.command == "sync":
-            synced = ensure_index(args.path, sync=True, **_index_kwargs(args))
+            synced = ensure_index(args.path, sync=True, **index_kwargs(args))
             result = {"mode": synced["mode"], "index_path": synced["path"], **index_status(args.path), "sync_stats": synced["index"].get("sync_stats", {})}
         elif args.command == "symbol":
             root = pathlib.Path(args.path).resolve(); result = _symbol_with_ledger(root, args.file, args.symbol, args.session, args.max_file_bytes)
@@ -471,102 +194,12 @@ def main(argv: list[str] | None = None) -> int:
             context_pack = json.loads(pathlib.Path(args.context_json).read_text(encoding="utf-8"))
             answer = pathlib.Path(args.answer_file).read_text(encoding="utf-8", errors="replace")
             result = analyze_context_usage(context_pack, answer)
+        elif args.command == "context":
+            result = execute_context(args)
+        elif args.command in REPOSITORY_VIEW_COMMANDS:
+            result = handle_repository_view(args, persistent_index(args))
         else:
-            if args.command == "context":
-                root = pathlib.Path(args.path).resolve()
-                run_id = args.run_id or new_run_id()
-                trace = Trace(root, run_id)
-                route = route_task(args.task, args.path, forced_type=args.intent)
-                trace.event("route", route)
-
-                manual_blocks = _external_blocks(args.external)
-                auto_blocks, delegation_attempts, native_needed = _auto_delegate_trusted(root, route, args.task)
-                blocks = manual_blocks + auto_blocks
-                trace.event("provider-delegation", {
-                    "attempts": delegation_attempts,
-                    "manual_blocks": len(manual_blocks),
-                    "auto_blocks": len(auto_blocks),
-                })
-
-                if args.external_only:
-                    if not blocks:
-                        raise ValueError("--external-only requires --external data or a trusted provider that successfully delegates")
-                    index = _empty_index(root)
-                    native_index_used = False
-                elif not native_needed and blocks:
-                    index = _empty_index(root)
-                    native_index_used = False
-                else:
-                    index = _persistent(args)
-                    native_index_used = True
-
-                result = build_context(index, args.task, budget=args.budget, session=args.session,
-                                       max_files=args.max_context_files, max_symbols=args.max_symbols,
-                                       include_content=not args.structure_only, external_blocks=blocks)
-                result["route"] = route
-                result["run_id"] = run_id
-                result["orchestration"] = plan_harness(
-                    args.task, root, forced_type=args.intent,
-                    context_tokens=max(args.budget, 800), output_tokens=4000, model_calls=10,
-                    route_result=route,
-                )
-                result["orchestration"]["execution"] = "advisory-only; this command does not spawn agents"
-                result["provider_delegation"] = {
-                    "attempts": delegation_attempts,
-                    "manual_external_blocks": len(manual_blocks),
-                    "auto_external_blocks": len(auto_blocks),
-                    "native_index_used": native_index_used,
-                }
-                task_budget = TaskBudget(root, run_id, BudgetLimits(context_tokens=max(args.budget, 800)))
-                task_budget.configure_lanes(result["orchestration"]["lane_budget"]["lanes"])
-                tool_calls = 1 + len(delegation_attempts) + (1 if result.get("external_search", {}).get("used") else 0)
-                budget_state = task_budget.consume(context_tokens=result["budget"]["estimated_used_tokens"], tool_calls=tool_calls)
-                result["task_budget"] = budget_state
-                trace.event("routing-policy", {
-                    "complexity": result["orchestration"]["complexity"],
-                    "risk": result["orchestration"]["risk"],
-                    "model_roles": result["orchestration"]["model_policy"]["roles"],
-                    "retry_policy": result["orchestration"]["retry_policy"],
-                })
-                trace.event("context-pack", {
-                    "estimated_tokens": result["budget"]["estimated_used_tokens"],
-                    "files": len(result["files"]), "symbols": len(result["symbols"]),
-                    "external_blocks": len(result["external_context"]),
-                    "native_index_used": native_index_used,
-                    "coverage": result["coverage"], "stop_condition": result["stop_condition"],
-                })
-            else:
-                index = _persistent(args)
-                if args.command in {"map", "scan"}:
-                    result = project_map(index, top_k=args.top_k, query=args.query)
-                elif args.command == "query":
-                    result = project_map(index, top_k=args.top_k, query=args.query)
-                elif args.command == "module":
-                    result = module_map(index, args.module, top_k=args.top_k, query=args.query)
-                elif args.command == "deps":
-                    result = dependency_view(index, args.file, depth=args.depth)
-                    result["graph_semantics"] = "resolved static import graph; not a runtime call graph"
-                elif args.command == "callers":
-                    rel = pathlib.PurePosixPath(args.file).as_posix().lstrip("./")
-                    if rel not in index["by_path"]:
-                        raise ValueError(f"File not indexed: {rel}")
-                    result = {"path": rel, "statically_imported_by": index["graph"].get("reverse", {}).get(rel, []),
-                              "confidence": "high-for-resolved-static-imports", "not_provided": "runtime callers"}
-                elif args.command == "impact":
-                    rel = pathlib.PurePosixPath(args.file).as_posix().lstrip("./")
-                    if rel not in index["by_path"]:
-                        raise ValueError(f"File not indexed: {rel}")
-                    affected = neighborhood(index["graph"], [rel], depth=args.depth)
-                    ranked = rank_files([index["by_path"][p] for p in affected if p in index["by_path"]], index["graph"], index["entry_points"])
-                    result = {"seed": rel, "depth": args.depth, "affected_files": [f["path"] for f in ranked[:args.top_k]],
-                              "classification": "static-dependency-neighborhood", "runtime_impact_guarantee": False}
-                elif args.command == "changed":
-                    changed = changed_files(pathlib.Path(args.path).resolve(), base=args.base)
-                    result = changed_view(index, changed, depth=args.depth, top_k=args.top_k)
-                elif args.command == "admit":
-                    result = evaluate_read(index, args.file, args.task, session=args.session, requested=args.requested)
-                else:
-                    raise ValueError(f"Unknown command: {args.command}")
+            raise ValueError(f"Unknown command: {args.command}")
         print(json.dumps(result, ensure_ascii=False, indent=2 if getattr(args, "pretty", False) else None,
                          separators=None if getattr(args, "pretty", False) else (",", ":")))
         return 0

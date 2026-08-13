@@ -4,7 +4,7 @@ import json
 import pathlib
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 
 DEFAULT = {"version": 1, "trusted_providers": [], "preferred_providers": {}}
 
@@ -28,6 +28,7 @@ def load_config(root: pathlib.Path) -> dict[str, Any]:
 
 def save_config(root: pathlib.Path, data: dict[str, Any]) -> pathlib.Path:
     path = config_path(root)
+    prepare_state_dir(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return path

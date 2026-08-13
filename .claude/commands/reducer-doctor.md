@@ -1,16 +1,16 @@
 ---
-description: General repository task. Auto-route the request, reuse compatible providers first, then return minimal context.
+description: Detect overlapping Skills/plugins/providers and show which capabilities will be reused versus native fallback.
 argument-hint: <task>
 ---
 
-# reducer-repo
+# reducer-doctor
 
 Use Agent Repo Context Reducer before broad repository exploration.
 
 Run:
 
 ```bash
-python scripts/repo_context.py run reducer-repo "$ARGUMENTS" --repo . --pretty
+repo-context run reducer-doctor --repo . --pretty
 ```
 
 Rules:

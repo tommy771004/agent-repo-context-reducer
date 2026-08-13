@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 
 
 @dataclass
@@ -102,5 +102,6 @@ class TaskBudget:
                 "exceeded": sorted(set(exceeded)), "allow_more_work": not bool(exceeded)}
 
     def save(self) -> None:
+        prepare_state_dir(self.root)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

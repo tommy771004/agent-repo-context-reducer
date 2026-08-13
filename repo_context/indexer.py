@@ -38,6 +38,8 @@ def ensure_index(root: pathlib.Path | str, sync: bool = True, **kwargs: Any) -> 
     root = pathlib.Path(root).resolve()
     existing = load_index(root)
     if existing is None:
+        if not sync:
+            raise ValueError("No persistent index exists; run `repo-context index` first or omit --no-sync")
         return build_persistent(root, **kwargs)
     if not sync:
         return {"index": hydrate(existing), "path": str(root / ".repo-context" / "index.json"), "mode": "loaded"}
@@ -48,6 +50,7 @@ def ensure_index(root: pathlib.Path | str, sync: bool = True, **kwargs: Any) -> 
     current_paths = {f["path"] for f in current.get("files", [])}
     stats = current.setdefault("sync_stats", {})
     stats.update({
+        "refresh_mode": "source-parse-cache-aware; graph/ranking rebuilt",
         "previous_indexed_at": before,
         "synced_at": int(time.time()),
         "added_files": sorted(current_paths - previous_paths)[:100],
@@ -55,7 +58,7 @@ def ensure_index(root: pathlib.Path | str, sync: bool = True, **kwargs: Any) -> 
         "cache_hits": current.get("stats", {}).get("cache_hits", 0),
         "reparsed_source_files": current.get("stats", {}).get("cache_misses", 0),
     })
-    result["mode"] = "synced"
+    result["mode"] = "refreshed"
     return result
 
 

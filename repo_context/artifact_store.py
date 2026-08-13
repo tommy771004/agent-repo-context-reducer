@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 from .util import estimate_tokens_from_bytes
 
 
@@ -44,6 +44,7 @@ class ArtifactStore:
             "metadata": metadata or {},
             "payload": value,
         }
+        prepare_state_dir(self.root)
         self.dir.mkdir(parents=True, exist_ok=True)
         path = self._path(aid)
         tmp = path.with_suffix(".tmp")

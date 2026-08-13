@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Any, Iterable
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 from .provider_health import ProviderHealth
 from .config import load_config, is_trusted
 
@@ -51,6 +51,36 @@ NATIVE_CAPABILITIES = {
     "knowledge.search",
     "knowledge.history",
 }
+CORE_CAPABILITIES = {
+    "context.budget", "context.dedup", "context.session", "context.delta",
+    "context.lifecycle", "context.provenance", "context.handoff", "context.artifact",
+}
+NATIVE_FALLBACK_CAPABILITIES = {
+    "repository.index", "repository.graph", "repository.symbols", "repository.imports",
+    "repository.references", "repository.impact", "repository.search",
+    "code.read-symbol", "code.structure", "git.changed", "git.diff",
+    "knowledge.search", "knowledge.history",
+}
+ADVISORY_CAPABILITIES = NATIVE_CAPABILITIES - CORE_CAPABILITIES - NATIVE_FALLBACK_CAPABILITIES
+EXTERNAL_OPTIONAL_CAPABILITIES = {
+    "knowledge.graph", "executor.code", "executor.autonomous", "orchestration.parallel",
+    "model.cheap", "model.standard", "model.strong", "quality.grader",
+}
+
+
+def native_capability_manifest(version: str) -> dict[str, Any]:
+    return {
+        "schema": CAPABILITY_SCHEMA,
+        "provider": {"name": "agent-repo-context-reducer", "version": version},
+        "provides": sorted(NATIVE_CAPABILITIES),
+        "notes": {
+            "core": sorted(CORE_CAPABILITIES),
+            "fallback": sorted(NATIVE_FALLBACK_CAPABILITIES),
+            "advisory": sorted(ADVISORY_CAPABILITIES),
+            "external_optional": sorted(EXTERNAL_OPTIONAL_CAPABILITIES),
+        },
+    }
+
 
 # These CLIs are only resolved for capabilities for which this project has a safe adapter.
 KNOWN_CLI_CAPABILITIES = {
@@ -345,6 +375,7 @@ def detect_providers(repo_root: pathlib.Path | str, required: Iterable[str] | No
         "detected_at": int(time.time()),
         "providers": [p.json() for p in providers],
     }
+    prepare_state_dir(root)
     cache.parent.mkdir(parents=True, exist_ok=True)
     try:
         cache.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

@@ -1,16 +1,16 @@
 ---
-description: Detect overlapping Skills/plugins/providers and show which capabilities will be reused versus native fallback.
+description: Review code or changes with provider reuse, diff-aware context selection, and bounded source expansion.
 argument-hint: <task>
 ---
 
-# reducer-doctor
+# reducer-review
 
 Use Agent Repo Context Reducer before broad repository exploration.
 
 Run:
 
 ```bash
-python scripts/repo_context.py run reducer-doctor --repo . --pretty
+repo-context run reducer-review "$ARGUMENTS" --repo . --pretty
 ```
 
 Rules:

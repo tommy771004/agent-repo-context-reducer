@@ -5,7 +5,7 @@ import pathlib
 import time
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 
 
 class ProviderHealth:
@@ -63,5 +63,6 @@ class ProviderHealth:
         return max(0.0, 1.0 - rate) * 20.0
 
     def save(self) -> None:
+        prepare_state_dir(self.root)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

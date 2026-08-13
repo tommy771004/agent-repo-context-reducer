@@ -7,6 +7,8 @@ description: Prevent AI coding agents from blindly loading repository files or d
 
 Use this Skill for non-trivial repository understanding, debugging, review, change-impact work, and context-efficient multi-agent engineering workflows.
 
+The **Core Reducer** is the default product surface. Complexity/model-tier/scheduler/grader features are an **optional advisory Harness Planner**; they do not spawn agents or switch models by themselves.
+
 ## Human-facing shortcuts
 
 Prefer these intent facades when the host exposes them:
@@ -35,7 +37,7 @@ If this root Skill was invoked without a specific facade, use:
 repo-context run reducer-repo "<user task>" --repo . --pretty
 ```
 
-When `repo-context` is not on PATH, run the bundled `scripts/repo_context.py` relative to this Skill directory.
+When `repo-context` is not on PATH, run the bundled `scripts/repo_context.py` relative to this Skill directory for direct Skill execution. Project-scope generated host shortcuts intentionally require portable `repo-context` on PATH; only global-scope installation may resolve a machine-local absolute runtime.
 
 All facades share the same provider registry, persistent index, graph, session ledger, artifact store, task budget and trace. Never create a second index because a different shortcut was used.
 
@@ -106,6 +108,10 @@ A full source read is an escalation, not the default. If more detail is needed a
 ## Token semantics
 
 Budgets use an approximate UTF-8-bytes/4 estimate unless a provider-specific tokenizer is configured. They are context-selection limits, not billing guarantees.
+
+## Local state semantics
+
+Native index-backed commands can write local state under `.repo-context/` even when the repository analysis itself is read-only. The first state write best-effort adds `.repo-context/` to `.gitignore`. `sync` is cache-aware for source parsing but rebuilds file enumeration, graph/ranking and the persistent JSON index. `--no-sync` means use an existing index only; it must not silently create one.
 
 ## Safety
 

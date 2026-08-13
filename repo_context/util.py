@@ -15,7 +15,7 @@ SOURCE_EXTENSIONS = {
     ".rb": "Ruby", ".php": "PHP", ".swift": "Swift",
     ".c": "C", ".h": "C/C++", ".cc": "C/C++", ".cpp": "C/C++", ".hpp": "C/C++",
     ".vue": "Vue", ".svelte": "Svelte", ".sql": "SQL",
-    ".sh": "Shell", ".ps1": "PowerShell",
+    ".sh": "Shell", ".bash": "Shell", ".zsh": "Shell", ".ps1": "PowerShell",
 }
 
 TEXT_CONFIG_EXTS = {".json", ".toml", ".yaml", ".yml", ".xml", ".ini", ".cfg", ".md"}

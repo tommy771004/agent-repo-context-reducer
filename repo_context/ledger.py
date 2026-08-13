@@ -7,7 +7,7 @@ import re
 import time
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 
 
 def _safe_session(session: str) -> str:
@@ -47,6 +47,7 @@ class SessionLedger:
         self.data["items"][key] = item
 
     def save(self) -> None:
+        prepare_state_dir(self.root)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

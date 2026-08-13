@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from .storage import state_dir
+from .storage import prepare_state_dir, state_dir
 
 
 def new_run_id() -> str:
@@ -20,6 +20,7 @@ class Trace:
         self.path = state_dir(root) / "runs" / f"{self.run_id}.jsonl"
 
     def event(self, kind: str, data: dict[str, Any]) -> None:
+        prepare_state_dir(self.root)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"ts": time.time(), "run_id": self.run_id, "kind": kind, "data": data}
         with self.path.open("a", encoding="utf-8") as fh:

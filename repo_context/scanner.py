@@ -226,7 +226,8 @@ def compact_file(f: dict[str, Any]) -> dict[str, Any]:
 
 
 def project_map(index: dict[str, Any], top_k: int = 25, query: str | None = None) -> dict[str, Any]:
-    ranked = rank_files(index["files"], index["graph"], index["entry_points"], query=query)
+    # The persistent index is already globally ranked. Re-rank only when a task query is supplied.
+    ranked = index["files"] if not query else rank_files(index["files"], index["graph"], index["entry_points"], query=query)
     selected = [compact_file(f) for f in ranked[:max(1, top_k)]]
     degree = index["graph"].get("degree", {})
     central = sorted(degree.items(), key=lambda kv: (-(kv[1]["in"] + kv[1]["out"]), kv[0]))[:20]
@@ -260,10 +261,37 @@ def project_map(index: dict[str, Any], top_k: int = 25, query: str | None = None
     return result
 
 
+def query_view(index: dict[str, Any], query: str, top_k: int = 20) -> dict[str, Any]:
+    ranked = rank_files(index["files"], index["graph"], index["entry_points"], query=query)
+    selected = [compact_file(f) for f in ranked[:max(1, top_k)]]
+    result = {
+        "query": query,
+        "mode": "task-ranked-query",
+        "matches": selected,
+        "project": {
+            "root_name": pathlib.Path(index["root"]).name,
+            "files_scanned": index["stats"].get("files_scanned", 0),
+            "languages": index.get("languages", {}),
+        },
+        "stats": {
+            "top_k": top_k,
+            "source_bytes_considered": index["stats"].get("source_bytes_considered", 0),
+            "output_note": "Task-specific ranking; this is distinct from the architecture-oriented project map.",
+        },
+    }
+    out_bytes = json_bytes(result)
+    result["stats"]["output_json_bytes"] = out_bytes
+    result["stats"]["estimated_output_tokens"] = estimate_tokens_from_bytes(out_bytes)
+    result["stats"]["token_estimate_note"] = "UTF-8 bytes / 4 approximation; not a tokenizer or billing estimate."
+    return result
+
+
 def module_map(index: dict[str, Any], module: str, top_k: int = 30, query: str | None = None) -> dict[str, Any]:
     prefix = module.strip("./")
     subset = [f for f in index["files"] if f["path"] == prefix or f["path"].startswith(prefix.rstrip("/") + "/")]
-    ranked = rank_files(subset, index["graph"], [e for e in index["entry_points"] if e.startswith(prefix)], query=query)
+    ranked = subset if not query else rank_files(
+        subset, index["graph"], [e for e in index["entry_points"] if e.startswith(prefix)], query=query
+    )
     return {
         "module": prefix or ".", "query": query, "files_found": len(subset),
         "important_files": [compact_file(f) for f in ranked[:max(1, top_k)]],
@@ -285,9 +313,9 @@ def dependency_view(index: dict[str, Any], path: str, depth: int = 1) -> dict[st
 
 def changed_view(index: dict[str, Any], changed: list[str], depth: int = 1, top_k: int = 40) -> dict[str, Any]:
     existing = [p for p in changed if p in index["by_path"]]
-    affected = neighborhood(index["graph"], existing, depth=depth)
-    ranked = [index["by_path"][p] for p in affected if p in index["by_path"]]
-    ranked = rank_files(ranked, index["graph"], index["entry_points"])
+    affected = set(neighborhood(index["graph"], existing, depth=depth))
+    # Preserve the persistent global ranking instead of re-ranking the same files.
+    ranked = [f for f in index["files"] if f["path"] in affected]
     return {
         "changed_files": changed, "indexed_changed_files": existing,
         "affected_depth": depth, "affected_files": [compact_file(f) for f in ranked[:max(1, top_k)]],

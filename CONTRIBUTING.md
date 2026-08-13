@@ -13,12 +13,21 @@ Contributions are welcome, especially for parser accuracy, dependency resolution
 ## Test
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```
 
 ## Smoke test
 
 ```bash
-python scripts/repo_context.py map examples/sample-project --top-k 5 --pretty
-python scripts/repo_context.py query examples/sample-project "payment checkout" --top-k 5 --pretty
+python3 scripts/repo_context.py map examples/sample-project --top-k 5 --pretty
+python3 scripts/repo_context.py query examples/sample-project "payment checkout" --top-k 5 --pretty
 ```
+## Generated artifacts
+
+Two machine-readable/readable surfaces have a runtime source of truth:
+
+- After changing `repo_context/capabilities.py`, run `python3 scripts/generate_capabilities.py`.
+- Shortcut behavior is defined in `repo_context/command_facade.py` and rendered by `repo_context/host_adapters.py`. Do not hand-edit the generated Claude/Codex snapshots without updating the renderer; regression tests compare them byte-for-byte.
+
+Project-scope shortcuts must remain portable and must not contain a developer-specific Python or repository absolute path.
+

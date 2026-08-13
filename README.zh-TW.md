@@ -71,6 +71,15 @@ Reasoning
 
 Reducer 屬於 **deterministic preprocessing（確定性前處理）**，本身不會呼叫 LLM。
 
+## 兩個產品面向
+
+本 Repository 刻意分成兩個獨立的產品面向：
+
+1. **Core Reducer — 預設產品面向。** Repository discovery、static index/graph、symbol extraction、Provider 重用、Context ranking、dedup、session state 與 bounded context emission。
+2. **Advisory Harness Planner — 選用。** Complexity／risk／model-tier 建議、lane budget、dependency-aware schedule、quality-gate packet 與 bounded retry policy。這些模組**本身不會 spawn Agent，也不會自行切換模型**；真正執行必須由 Host 或外部 Provider 提供。
+
+如果你的目標只是降低 Repository Context，可以完全忽略 Advisory Harness 的進階指令。
+
 ## 它做什麼
 
 | 功能 | Reducer 的處理方式 |
@@ -88,7 +97,7 @@ Reducer 屬於 **deterministic preprocessing（確定性前處理）**，本身�
 | Cache | 重用未變更檔案的 structural summaries |
 | Safety | 預設略過疑似 secrets、symlink、generated code、oversized/binary files |
 
-## v1.3 Harness 優化
+## 選用的 Advisory Harness Planner
 
 Reducer 現在把 Repository Context 視為更大的 **Information Orchestration（資訊編排）** 問題，而不是把 Kimi、OpenHands、GraphRAG 或任何特定 Stack 寫死進核心。Runtime 會依 capability 分層；有相容且受信任的 Provider 就重用，沒有時才使用自己真正具備的 fallback。
 
@@ -175,6 +184,20 @@ Sorter 預設不用 cheap model，因為 deterministic code 更便宜。只有 d
 
 `examples/provider-layers/` 內附 capability manifest 範本，但刻意不附可執行 command。要接入外部工具時，先把範本放到 `.repo-context/providers.d/`，再加入真正符合該工具的 adapter，確認 command contract 後才加入 trust。
 
+
+
+## v1.4 架構強化
+
+v1.4 以架構稽核為基礎，優先修正 correctness 與 maintainability，而不是再增加一層 orchestration：
+
+- project-scope Host shortcut 一律產生可攜式 `repo-context`，不再把開發者機器的絕對路徑寫進可 commit 檔案；
+- 已提交的 Claude／Codex shortcut snapshot 與同一 renderer 逐字比對，測試會阻止再次漂移；
+- Runtime state 與 structural cache 合併到單一 `.repo-context/` tree；
+- `capabilities.json` 由 Runtime `NATIVE_CAPABILITIES` 產生，並有一致性測試；
+- `map` 與 `query` 現在有不同 output contract；
+- `sync` 誠實描述為 cache-aware refresh：source parsing 可以重用，但 graph／ranking 仍會重建；
+- CLI parser、context orchestration 與 repository command handling 已拆成不同模組。
+
 ## Reducer 短指令
 
 對外介面刻意保持簡單：使用者只需要表達 intent；Skill 負責選 workflow；共用 runtime 再處理 Provider 偵測／重用、fallback、graph/index、去重與 budget。
@@ -197,10 +220,10 @@ Sorter 預設不用 cheap model，因為 deterministic code 更便宜。只有 d
 repo-context host-install --host claude-code --scope project --repo .
 ```
 
-若只有安裝 Skill、沒有把 Python CLI 裝到 PATH，也可以：
+Project scope 為了保持可攜性，產生的 shortcut 只會呼叫 PATH 上的 `repo-context`。若只有 source/Skill checkout、尚未安裝 CLI，可先安裝 runtime，或使用 **global scope** 讓 installer 在必要時解析本機 Python／script 絕對路徑：
 
 ```bash
-python scripts/repo_context.py host-install --host claude-code --scope project --repo .
+python3 scripts/repo_context.py host-install --host claude-code --scope global --repo .
 ```
 
 之後即可：
@@ -286,17 +309,19 @@ npx skills add tommy771004/agent-repo-context-reducer -g \
 ```bash
 git clone https://github.com/tommy771004/agent-repo-context-reducer.git
 cd agent-repo-context-reducer
-python scripts/repo_context.py map . --pretty
+python3 scripts/repo_context.py map . --pretty
 ```
 
 或直接安裝 `repo-context` 指令：
 
 ```bash
-python -m pip install git+https://github.com/tommy771004/agent-repo-context-reducer.git
+python3 -m pip install git+https://github.com/tommy771004/agent-repo-context-reducer.git
 repo-context --version
 ```
 
 Runtime 不需要任何第三方 Python dependency。
+
+**發佈邊界：** `npx skills add` 安裝 Skill 內容（`SKILL.md`、references 與 bundled scripts）；`pip`／`pipx` 安裝 Python runtime 與 `repo-context` console command。Wheel 刻意只作為 runtime distribution，不取代 Skill 文件樹的安裝。
 
 ## 快速開始
 
@@ -632,23 +657,42 @@ repo/
 repo-context module . services/payment --pretty
 ```
 
-## Incremental Cache
+## Persistent State 與 Cache
 
-Structural summaries 會快取在：
+需要 native Repository Index 的指令，預設會在本機維護狀態。第一次寫入後，Reducer 統一使用一個 state tree：
 
 ```text
-.repo-context-cache/
+.repo-context/
+├── index.json
+├── cache/summaries-v4.json
+├── sessions/
+├── runs/
+├── budgets/
+├── artifacts/
+└── provider-health.json / providers.json / knowledge.json / ...
 ```
 
-每個 cache entry 由 file path、modification time 與 size 決定。沒有改變的檔案，下次掃描不需要重新 parse。
+第一次成功寫入 state 時，Reducer 會 best-effort 將 `.repo-context/` 加入 Repository `.gitignore`。為了從 v1.4 以前版本升級，也會保留 legacy `.repo-context-cache/` ignore entry。
 
-Cache 儲存的是 structural summaries，不是完整 source text。
+Summary cache 有版本控管。當 structural parser 變更時版本會 bump，舊版本寫入的 cache 會**直接丟棄而不是遷移**——舊 parser 產生的 summary 依定義已經過期，而 cache key（path + mtime + size）會讓未變更的檔案永遠命中那份舊結果。過期的 cache 檔會在下次成功寫入時移除。
 
-停用方式：
+`map`、`query`、`module`、`deps`、`callers`、`impact`、`changed`、`admit`、`context` 通常都會 refresh／load persistent index，因此即使它們對模型輸出的是**唯讀 Repository 分析**，仍可能寫入 `.repo-context/index.json` 與 cache metadata。
+
+`sync` 是 **cache-aware refresh**，不是完整的 incremental graph update。未變更 source 的 structural summary 可以重用，但 file enumeration、dependency graph construction、ranking 與 persistent JSON write 仍會重建。
+
+若要只使用既有 index、完全不 refresh：
+
+```bash
+repo-context map . --no-sync
+```
+
+`--no-sync` 不會替你建立不存在的 index；請先執行 `repo-context index .`。停用 structural-summary cache：
 
 ```bash
 repo-context map . --no-cache
 ```
+
+Cache 儲存的是 structural summaries，不是完整 source text。
 
 ## 安全性
 
@@ -689,88 +733,87 @@ UTF-8 bytes / 4
 
 ## 支援語言
 
-目前 structural extraction 可辨識：
+抽取深度**並不一致**。語言辨識（用於語言統計、索引與排序）的涵蓋範圍比 structural extraction 更廣，而真正餵給 dependency graph 與 symbol-level reading 的是後者。
 
-- Python
-- JavaScript / TypeScript / JSX / TSX
-- C#
-- Rust
-- Go
-- Java
-- Kotlin
-- Ruby
-- PHP
-- Swift
-- C / C++
-- Vue
-- Svelte
-- SQL
-- shell / PowerShell
+| 層級 | 語言 | Imports | Classes / types | Functions | `symbol` 讀取 |
+|---|---|---|---|---|---|
+| 完整 AST | Python | 有 | 有 | 有 | 有 |
+| 語言感知 heuristic | JavaScript、TypeScript、JSX、TSX、Vue、Svelte、Rust、Go、C#、Java、Kotlin、C、C++、shell、PowerShell | 有 | 有 | 有 | 有 |
+| 以物件取代 import | SQL | 不適用 | table／view／type | procedure／function | 有 |
+| 部分 | Swift、PHP | **無** | 有 | 有 | 有 |
+| 部分 | Ruby | **無** | 有 | **無** | 僅 class |
 
-Python 使用標準函式庫 AST。其他語言目前採 lightweight language-aware extraction；語法不明確時會保守 fallback。
+Python 使用標準函式庫 AST。其餘語言採以 regex 為基礎的 language-aware extraction；語法不明確時會保守 fallback。
+
+**Import 解析細節：**
+
+- C/C++ 的 `#include "local.h"` 視為專案內部引用，可解析成 graph edge；`#include <system.h>` 保留為 external import。沒有函式主體的宣告不會被當成 function。
+- shell 的 `source ./lib.sh` 與 PowerShell 的 `. .\helper.ps1` 可解析成 graph edge（反斜線路徑會正規化）；`Import-Module Az` 維持 external。
+- SQL 沒有 import 概念，因此 SQL 檔案不會產生依賴邊。`CREATE TABLE/VIEW/TYPE` 歸入 types，`CREATE PROCEDURE/FUNCTION` 歸入 functions。
+- Swift、PHP、Ruby 目前沒有 import 抽取，因此**不會產生任何本地 dependency graph edge**。
+
+**下層級的實際影響**：所有被辨識的檔案都會被探索、遵守 `.gitignore`、計入語言統計並參與排序；但在沒有抽取 import 的情況下，排序會偏重路徑／檔名訊號而非 graph centrality。`repo-context symbol` 只能讀取「已被抽取」的 symbol；找不到時回傳 `Symbol not found`，progressive disclosure 退化成整檔讀取。
 
 ## Repository 結構
+
+以下依責任分組，而不是在 README 複製一份會快速過期的「完整模組清單」：
 
 ```text
 agent-repo-context-reducer/
 ├── SKILL.md
-├── README.md
-├── README.zh-TW.md
-├── SECURITY.md
-├── CONTRIBUTING.md
-├── CHANGELOG.md
-├── pyproject.toml
+├── capabilities.json              # 由 runtime capability 單一來源產生
+├── .claude/commands/              # 產生式／可讀的 Claude shortcut snapshots
+├── adapters/codex/                # 產生式／可讀的 Codex Skill snapshots
 ├── repo_context/
-│   ├── cli.py
-│   ├── scanner.py
-│   ├── parsers.py
-│   ├── graph.py
-│   ├── ranking.py
-│   ├── git_utils.py
-│   ├── workspaces.py
-│   ├── cache.py
-│   ├── complexity.py
-│   ├── risk.py
-│   ├── model_router.py
-│   ├── lane_budget.py
-│   ├── scheduler.py
-│   ├── grader.py
-│   ├── retry_policy.py
-│   ├── handoff.py
-│   ├── artifact_store.py
-│   ├── knowledge.py
-│   ├── orchestration.py
-│   └── util.py
+│   ├── cli.py                     # 薄 dispatch / output / error boundary
+│   ├── cli_parser.py              # argparse 註冊
+│   ├── command_facade.py          # reducer-* 單一事實來源
+│   ├── host_adapters.py           # Host shortcut renderer / installer
+│   ├── context_command.py         # Context orchestration handler
+│   ├── repository_commands.py     # map/query/deps/impact handlers
+│   ├── scanner.py / parsers.py / symbols.py / graph.py / ranking.py
+│   ├── indexer.py / index_runtime.py / storage.py / cache.py
+│   ├── capabilities.py / delegate.py / provider_*.py / config.py
+│   ├── context_planner.py / admission.py / ledger.py / lifecycle.py / voi.py
+│   └── complexity.py / risk.py / model_router.py / scheduler.py / grader.py / ...
 ├── scripts/
-│   └── repo_context.py
+│   ├── repo_context.py
+│   └── generate_capabilities.py
 ├── references/
-│   ├── architecture.md
+│   ├── overview.md
+│   ├── architecture/
+│   ├── workflows/
+│   ├── policies/
+│   ├── providers/
 │   ├── harness/
-│   └── providers/
+│   ├── observability/
+│   └── evaluation/
+├── docs/audits/                   # 架構稽核歷史與修復證據
 ├── examples/
-│   └── sample-project/
-└── tests/
-    └── test_repo_context.py
+├── .github/workflows/test.yml
+└── tests/                         # reducer / harness / facade / manifest / version regression
 ```
+
+`repo_context/` 仍維持 dependency-acyclic；`cli.py` 已不再承擔 parser registration 或 context/repository business logic。
 
 ## 開發
 
 執行測試：
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```
 
 執行 sample project map：
 
 ```bash
-python scripts/repo_context.py map examples/sample-project --pretty
+python3 scripts/repo_context.py map examples/sample-project --pretty
 ```
 
 Task-aware example：
 
 ```bash
-python scripts/repo_context.py query examples/sample-project \
+python3 scripts/repo_context.py query examples/sample-project \
   "payment checkout" --top-k 5 --pretty
 ```
 

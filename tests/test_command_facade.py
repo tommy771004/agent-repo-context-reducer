@@ -9,7 +9,9 @@ import unittest
 
 from repo_context.cli import main
 from repo_context.command_facade import FACADES, get_facade
-from repo_context.host_adapters import install_host_commands, host_status
+from repo_context.host_adapters import (
+    PORTABLE_PROJECT_RUNTIME, host_status, install_host_commands, render_claude_command, render_codex_skill,
+)
 from repo_context.router import route_task
 
 
@@ -48,6 +50,26 @@ class CommandFacadeTests(unittest.TestCase):
             text = skill.read_text(encoding="utf-8")
             self.assertIn("name: reducer-review", text)
             self.assertIn("run reducer-review", text)
+
+
+    def test_project_scope_shortcuts_use_portable_runtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            result = install_host_commands(root, "claude-code", scope="project")
+            self.assertEqual(result["runtime"], "repo-context")
+            self.assertTrue(result["portable"])
+            text = (root / ".claude" / "commands" / "reducer-repo.md").read_text(encoding="utf-8")
+            self.assertIn("repo-context run reducer-repo", text)
+            self.assertNotIn(str(pathlib.Path.home()), text)
+
+    def test_committed_host_snapshots_match_renderer(self):
+        project_root = pathlib.Path(__file__).resolve().parents[1]
+        for spec in FACADES.values():
+            claude = project_root / ".claude" / "commands" / f"{spec.name}.md"
+            codex = project_root / "adapters" / "codex" / spec.name / "SKILL.md"
+            self.assertEqual(claude.read_text(encoding="utf-8"), render_claude_command(spec, PORTABLE_PROJECT_RUNTIME))
+            self.assertEqual(codex.read_text(encoding="utf-8"), render_codex_skill(spec, PORTABLE_PROJECT_RUNTIME))
+        self.assertFalse((project_root / "commands").exists())
 
     def test_cli_commands_lists_facades(self):
         out = io.StringIO()

@@ -8,6 +8,26 @@ from typing import Any
 from .util import compact_signature, uniq
 
 JS_EXTS = {".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".vue", ".svelte"}
+C_EXTS = {".c", ".h", ".cc", ".cpp", ".hpp"}
+SHELL_EXTS = {".sh", ".bash", ".zsh"}
+
+# Control-flow keywords that look like C call sites but are not definitions.
+C_NON_FUNCTIONS = {"if", "for", "while", "switch", "catch", "return", "sizeof", "do", "else"}
+
+C_INCLUDE_RE = re.compile(r'^#include\s+(?:"([^"]+)"|<([^>]+)>)')
+C_FUNCTION_RE = re.compile(r"^(?:[A-Za-z_][\w:<>,\s\*&]*?[\s\*&])([A-Za-z_]\w*)\s*\((.*?)\)\s*(?:const\s*)?\{")
+SHELL_SOURCE_RE = re.compile(r"^(?:source|\.)\s+([^\s;|&]+)")
+SHELL_FUNCTION_RE = re.compile(r"^(?:function\s+)?([A-Za-z_][\w-]*)\s*\(\s*\)\s*\{")
+SHELL_FUNCTION_KW_RE = re.compile(r"^function\s+([A-Za-z_][\w-]*)\s*\{")
+PS_IMPORT_RE = re.compile(r"^Import-Module\s+([^\s;]+)", re.I)
+PS_DOTSOURCE_RE = re.compile(r"^\.\s+([.\\/][^\s;]+)")
+PS_FUNCTION_RE = re.compile(r"^function\s+([A-Za-z_][\w-]*)", re.I)
+SQL_OBJECT_RE = re.compile(
+    r"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)\s+|GLOBAL\s+|UNIQUE\s+|MATERIALIZED\s+)?"
+    r"(TABLE|VIEW|TYPE|SCHEMA|INDEX|TRIGGER|PROCEDURE|FUNCTION)\s+"
+    r"(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][\w.]*)",
+    re.I,
+)
 
 
 def _empty(lines: int) -> dict[str, Any]:
@@ -90,7 +110,10 @@ def parse_heuristic(path: str, text: str) -> dict[str, Any]:
         logical_lines.append(buffer)
 
     for line in logical_lines:
-        if line.startswith(("//", "#", "/*", "*")):
+        # `#` is a comment in shell/PowerShell/Ruby, but a C preprocessor include is a real import.
+        if line.startswith("#") and not (ext in C_EXTS and line.startswith("#include")):
+            continue
+        if line.startswith(("//", "/*", "*")):
             continue
 
         if ext in JS_EXTS:
@@ -107,6 +130,33 @@ def parse_heuristic(path: str, text: str) -> dict[str, Any]:
         elif ext in {".cs", ".java", ".kt", ".kts"}:
             m = re.match(r"(?:using|import)\s+([^;]+)", line)
             if m: imports.append(m.group(1))
+        elif ext in C_EXTS:
+            m = C_INCLUDE_RE.match(line)
+            if m:
+                # Quoted includes are project-local by C convention; angle includes are system/external.
+                imports.append(f"./{m.group(1)}" if m.group(1) else m.group(2))
+        elif ext in SHELL_EXTS:
+            m = SHELL_SOURCE_RE.match(line)
+            if m and not m.group(1).startswith("$"):
+                imports.append(m.group(1).strip("'\""))
+        elif ext == ".ps1":
+            m = PS_IMPORT_RE.match(line)
+            if m:
+                imports.append(m.group(1).strip("'\""))
+            else:
+                m = PS_DOTSOURCE_RE.match(line)
+                if m: imports.append(m.group(1).replace("\\", "/"))
+
+        if ext == ".sql":
+            m = SQL_OBJECT_RE.match(line)
+            if m:
+                kind, name = m.group(1).upper(), m.group(2)
+                if kind in {"PROCEDURE", "FUNCTION"}:
+                    functions.append(f"{name}()")
+                else:
+                    types.append(name)
+                symbols.append(name)
+            continue
 
         for pat in [
             r"^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_]\w*)",
@@ -148,6 +198,16 @@ def parse_heuristic(path: str, text: str) -> dict[str, Any]:
                 m = re.search(r"([A-Za-z_]\w*)\s*\((.*?)\)", line)
                 if m and m.group(1) not in {"if", "for", "while", "switch", "catch", "new", "return"}:
                     fn_name, fn_args = m.group(1), m.group(2)
+        elif ext in C_EXTS:
+            m = C_FUNCTION_RE.match(line)
+            if m and m.group(1) not in C_NON_FUNCTIONS:
+                fn_name, fn_args = m.group(1), m.group(2)
+        elif ext in SHELL_EXTS:
+            m = SHELL_FUNCTION_RE.match(line) or SHELL_FUNCTION_KW_RE.match(line)
+            if m: fn_name, fn_args = m.group(1), ""
+        elif ext == ".ps1":
+            m = PS_FUNCTION_RE.match(line)
+            if m: fn_name, fn_args = m.group(1), ""
         if fn_name:
             functions.append(compact_signature(f"{fn_name}({fn_args})"))
             symbols.append(fn_name)

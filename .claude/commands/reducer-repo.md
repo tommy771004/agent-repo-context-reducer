@@ -1,16 +1,16 @@
 ---
-description: Debug a repository issue with provider reuse, graph-guided search, symbol-first reading, and a bounded context pack.
+description: General repository task. Auto-route the request, reuse compatible providers first, then return minimal context.
 argument-hint: <task>
 ---
 
-# reducer-debug
+# reducer-repo
 
 Use Agent Repo Context Reducer before broad repository exploration.
 
 Run:
 
 ```bash
-python scripts/repo_context.py run reducer-debug "$ARGUMENTS" --repo . --pretty
+repo-context run reducer-repo "$ARGUMENTS" --repo . --pretty
 ```
 
 Rules:

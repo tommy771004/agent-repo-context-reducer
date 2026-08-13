@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.0
+
+- Fixed project-scope host shortcuts so committed files use portable `repo-context` instead of developer-specific absolute Python/script paths.
+- Removed the redundant root `commands/` snapshot; committed Claude/Codex shortcut snapshots are now renderer-generated and protected by drift tests.
+- Consolidated persistent runtime state and structural cache under `.repo-context/`, with best-effort `.gitignore` management.
+- Added structural extraction for C/C++ (`#include`, definitions), shell (`source`, both function forms), PowerShell (`Import-Module`, dot-sourcing, hyphenated names) and SQL (`CREATE TABLE/VIEW/TYPE/PROCEDURE/FUNCTION`). These languages previously contributed no imports, symbols or dependency-graph edges despite being listed as supported.
+- Enabled `repo-context symbol` reading for C/C++, shell, PowerShell and SQL, so progressive disclosure no longer degrades to full-file reads for those languages.
+- Registered `.bash` and `.zsh` as shell sources.
+- Bumped the summary cache version and made stale-generation caches be discarded rather than migrated, so a parser change cannot keep serving summaries produced by the previous parser.
+- Replaced the flat "Supported Languages" list in both READMEs with a per-language extraction tier table verified by regression tests.
+- Made `--no-sync` strictly read an existing persistent index and fail when none exists.
+- Corrected `sync` semantics: source parsing is cache-aware, while file enumeration, graph construction, ranking and index persistence are rebuilt.
+- Generated `capabilities.json` from the runtime capability source of truth and added manifest consistency tests.
+- Split `map` and `query` into distinct output contracts and removed avoidable ranking recomputation on non-query views.
+- Split CLI parsing, repository handlers and context orchestration out of the former CLI god module.
+- Renamed `references/architecture.md` to `references/overview.md` to avoid file/directory naming ambiguity.
+- Reworked both READMEs around two explicit product surfaces: the Core Reducer and the optional advisory Harness Planner.
+- Archived the v1.3 architecture audit and added a v1.4 remediation record under `docs/audits/`.
+
 ## 1.3.0
 
 - Added deterministic risk/ambiguity routing and vendor-neutral `cheap` / `standard` / `strong` model tiers.

@@ -1,16 +1,16 @@
 ---
-description: Review code or changes with provider reuse, diff-aware context selection, and bounded source expansion.
+description: Debug a repository issue with provider reuse, graph-guided search, symbol-first reading, and a bounded context pack.
 argument-hint: <task>
 ---
 
-# reducer-review
+# reducer-debug
 
 Use Agent Repo Context Reducer before broad repository exploration.
 
 Run:
 
 ```bash
-python scripts/repo_context.py run reducer-review "$ARGUMENTS" --repo . --pretty
+repo-context run reducer-debug "$ARGUMENTS" --repo . --pretty
 ```
 
 Rules:

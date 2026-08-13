@@ -11,10 +11,10 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 import sys
 sys.path.insert(0, str(ROOT))
 
-from repo_context.cache import SummaryCache
+from repo_context.cache import CACHE_VERSION, SummaryCache
 from repo_context.git_utils import changed_files
 from repo_context.parsers import summarize_source
-from repo_context.scanner import build_index, changed_view, dependency_view, module_map, project_map
+from repo_context.scanner import build_index, changed_view, dependency_view, module_map, project_map, query_view
 from repo_context.cli import inspect_file, _symbol_with_ledger
 from repo_context.context_planner import build_context
 from repo_context.indexer import build_persistent, ensure_index, index_status
@@ -111,7 +111,7 @@ class Demo:
     def test_cache_hits_on_second_scan(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            (root / ".gitignore").write_text(".repo-context-cache/\n", encoding="utf-8")
+            (root / ".gitignore").write_text(".repo-context/\n", encoding="utf-8")
             (root / "main.py").write_text("def main(): pass\n", encoding="utf-8")
             first = build_index(root, use_cache=True)
             self.assertEqual(first["stats"].get("cache_hits", 0), 0)
@@ -125,7 +125,7 @@ class Demo:
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
-            (root / ".gitignore").write_text(".repo-context-cache/\n", encoding="utf-8")
+            (root / ".gitignore").write_text(".repo-context/\n", encoding="utf-8")
             (root / "main.js").write_text('const x = require("./service");\n', encoding="utf-8")
             (root / "service.js").write_text("function run() { return 1; }\n", encoding="utf-8")
             subprocess.run(["git", "-C", str(root), "add", "."], check=True)
@@ -159,6 +159,37 @@ class Demo:
             stats = synced["index"].get("sync_stats", {})
             self.assertGreaterEqual(stats.get("cache_hits", 0), 1)
             self.assertEqual(stats.get("reparsed_source_files", 0), 0)
+            self.assertEqual(stats.get("refresh_mode"), "source-parse-cache-aware; graph/ranking rebuilt")
+
+    def test_no_sync_requires_existing_index_and_does_not_create_state(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "No persistent index exists"):
+                ensure_index(root, sync=False, use_cache=True)
+            self.assertFalse((root / ".repo-context").exists())
+
+
+    def test_runtime_state_is_single_directory_and_auto_gitignored(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+            build_persistent(root, use_cache=True)
+            self.assertTrue((root / ".repo-context" / "index.json").is_file())
+            self.assertTrue((root / ".repo-context" / "cache" / f"summaries-v{CACHE_VERSION}.json").is_file())
+            self.assertFalse((root / ".repo-context-cache").exists())
+            ignore = (root / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn(".repo-context/", ignore)
+            self.assertIn(".repo-context-cache/", ignore)
+
+    def test_query_view_is_distinct_from_project_map(self):
+        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
+        mapped = project_map(index, top_k=3)
+        queried = query_view(index, "payment checkout", top_k=3)
+        self.assertIn("important_files", mapped)
+        self.assertNotIn("matches", mapped)
+        self.assertIn("matches", queried)
+        self.assertEqual(queried["mode"], "task-ranked-query")
 
     def test_router_selects_debug_workflow(self):
         routed = route_task("payment fails with an exception during checkout")
@@ -167,11 +198,20 @@ class Demo:
         self.assertEqual(routed["classification"], "heuristic")
 
     def test_context_respects_budget_and_uses_symbols(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        result = build_context(index, "payment checkout order", budget=1800, session="test-budget")
-        self.assertLessEqual(result["budget"]["estimated_used_tokens"], 1800)
-        self.assertTrue(result["files"])
-        self.assertTrue(any(s["name"] in {"charge", "checkout", "createOrder"} for s in result["symbols"]))
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            source = ROOT / "examples" / "sample-project"
+            for path in source.rglob("*"):
+                if path.is_file() and ".repo-context" not in path.parts:
+                    rel = path.relative_to(source)
+                    target = root / rel
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(path.read_bytes())
+            index = build_index(root, use_cache=False)
+            result = build_context(index, "payment checkout order", budget=1800, session="test-budget")
+            self.assertLessEqual(result["budget"]["estimated_used_tokens"], 1800)
+            self.assertTrue(result["files"])
+            self.assertTrue(any(s["name"] in {"charge", "checkout", "createOrder"} for s in result["symbols"]))
 
     def test_symbol_session_dedup_omits_unchanged_second_read(self):
         with tempfile.TemporaryDirectory() as td:

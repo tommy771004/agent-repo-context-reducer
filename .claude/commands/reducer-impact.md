@@ -10,7 +10,7 @@ Use Agent Repo Context Reducer before broad repository exploration.
 Run:
 
 ```bash
-python scripts/repo_context.py run reducer-impact "$ARGUMENTS" --repo . --pretty
+repo-context run reducer-impact "$ARGUMENTS" --repo . --pretty
 ```
 
 Rules:
