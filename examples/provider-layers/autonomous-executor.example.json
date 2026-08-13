@@ -1,0 +1,6 @@
+{
+  "schema": "repo-context-capabilities/v1",
+  "provider": {"name": "external-autonomous-executor", "type": "plugin"},
+  "provides": ["executor.autonomous"],
+  "notes": "Discovery template only. A compatible trusted adapter is required for machine execution."
+}

@@ -38,6 +38,18 @@ NATIVE_CAPABILITIES = {
     "harness.replay",
     "harness.tool-policy",
     "harness.fanout-policy",
+    "harness.complexity",
+    "harness.risk-routing",
+    "harness.model-routing",
+    "harness.retry-policy",
+    "context.lane-budget",
+    "quality.gate",
+    "orchestration.scheduler",
+    "orchestration.handoff",
+    "context.handoff",
+    "context.artifact",
+    "knowledge.search",
+    "knowledge.history",
 }
 
 # These CLIs are only resolved for capabilities for which this project has a safe adapter.
@@ -70,6 +82,16 @@ CAPABILITY_HINTS: dict[str, tuple[str, ...]] = {
     "repository.search": ("code search", "repository search", "semantic search"),
     "repository.index": ("repository index", "code index", "index codebase"),
     "repository.impact": ("impact analysis", "affected files", "change impact"),
+    "knowledge.search": ("knowledge search", "project memory", "documentation search", "rag", "graphrag"),
+    "knowledge.graph": ("knowledge graph", "graphrag", "entity graph", "community graph"),
+    "executor.code": ("coding agent", "code executor", "implement code", "terminal agent"),
+    "executor.autonomous": ("autonomous developer", "autonomous coding", "engineering agent"),
+    "orchestration.parallel": ("multi-agent", "multi agent", "parallel agents", "agent orchestration"),
+    "orchestration.handoff": ("agent handoff", "handoff", "delegate agent"),
+    "quality.grader": ("quality grader", "independent grader", "grade agent", "quality gate"),
+    "model.cheap": ("cheap model", "fast model", "small model", "low cost model"),
+    "model.standard": ("standard model", "coding model", "worker model"),
+    "model.strong": ("strong model", "reasoning model", "frontier model", "high capability model"),
 }
 
 
@@ -365,7 +387,8 @@ def resolve_capability(repo_root: pathlib.Path | str, capability: str, allow_ext
                 overlaps.append({**p, "blocked_reason": "external-command-delegation-not-authorized"})
                 continue
         usable.append(p)
-    selected = usable[0] if usable else native_provider({capability}).json()
+    native = native_provider({capability}).json() if capability in NATIVE_CAPABILITIES else None
+    selected = usable[0] if usable else native
     return {
         "capability": capability,
         "selected": selected,
@@ -373,7 +396,7 @@ def resolve_capability(repo_root: pathlib.Path | str, capability: str, allow_ext
         "potential_overlaps": overlaps,
         "policy": "detect-reuse-delegate-native-fallback",
         "external_command_delegation": allow_external_commands,
-        "trusted_selected": is_trusted(resolved_root, selected.get("id", "")),
+        "trusted_selected": bool(selected) and is_trusted(resolved_root, selected.get("id", "")),
         "preferred_provider": preferred,
         "provider_health": {p.get("id", ""): health.summary(p.get("id", "")).get(p.get("id", "")) for p in candidates},
     }

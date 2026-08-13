@@ -6,20 +6,21 @@
 User task
    |
    v
-Task router
+Task router + complexity router
    |
    v
-Required capabilities
+Required / optional capabilities
    |
    v
 Capability resolver
    |
    +--> trusted compatible Skill / registered MCP-plugin adapter
    +--> known safe CLI adapter
-   `--> native fallback
+   +--> native fallback only where implemented
+   `--> unresolved when no truthful provider exists
             |
             v
-      repository index / graph / symbols
+      repository / knowledge / executor / orchestration layers
             |
             v
 Context gateway
@@ -35,36 +36,62 @@ Context gateway
    v
 Minimal context pack
    |
-   v
-AI coding agent
+   +--> single worker for trivial/focused tasks
+   `--> dependency-aware schedule for larger tasks
+            |
+            +--> artifact store for large outputs
+            `--> reduced structured handoffs between agents
 ```
 
 ## Harness layers
 
 1. Task routing
-2. Capability discovery/resolution
-3. Provider trust/health
-4. Native deterministic fallback
-5. Read admission
-6. Context planning/budget/lifecycle
-7. Multi-agent backpressure policy
-8. Tool-risk policy
-9. Trace/replay
-10. Benchmark/attribution
+2. Task complexity routing
+3. Capability discovery/resolution
+4. Provider trust/health
+5. Native deterministic fallback where implemented
+6. Repository/code graph layer
+7. Knowledge-memory layer
+8. Executor provider layer
+9. Read admission
+10. Context planning/budget/lifecycle
+11. Artifact store and agent handoff reduction
+12. Dependency-aware multi-agent scheduling/backpressure
+13. Tool-risk policy
+14. Trace/replay
+15. Benchmark/attribution
+
+## Capability boundaries
+
+- `repository.*` — code index, symbols, static dependency graph, references and search.
+- `knowledge.*` — documentation/history retrieval and optional external semantic knowledge graphs.
+- `executor.*` — external coding/autonomous engineering executors.
+- `orchestration.*` — dependency-aware scheduling, handoffs and optional multi-agent frameworks.
+- `context.*` — context budget, deduplication, session state, lifecycle, artifacts and handoff reduction.
+
+A provider in one layer does not automatically substitute for a different layer. In particular, a semantic knowledge graph is not assumed to be a static code-dependency graph.
 
 ## Provider rule
 
 Native graph/index/symbol implementations are fallbacks. They exist so the project remains useful in an empty environment; they are not intended to duplicate a compatible trusted provider.
 
-Unknown Skills can be detected as potential overlap from metadata, but are not machine-compatible until an adapter/manifest is available.
+Unknown Skills can be detected as potential overlap from metadata, but are not machine-compatible until an adapter/manifest is available. Unsupported optional capabilities such as `executor.autonomous` remain unresolved when no compatible provider exists.
 
 ## Native graph semantics
 
-The bundled graph resolves local static imports and reverse imports. It is not a guaranteed runtime call graph. Dynamic dispatch, reflection, runtime dependency injection and generated runtime links may be absent.
+The bundled repository graph resolves local static imports and reverse imports plus indexed definitions. It is not a guaranteed runtime call graph. Dynamic dispatch, reflection, runtime dependency injection and generated runtime links may be absent.
 
-## Context contract
+The bundled `knowledge.search` fallback is deterministic lexical retrieval over documentation-like files. It is not GraphRAG and does not infer semantic communities or entity relationships.
 
-The full index stays outside model context. The gateway emits only budgeted structural/symbol/external blocks with provenance and fingerprints. Session history can replace unchanged symbol bodies with small references.
+## Context and handoff contract
+
+The full repository index and raw artifacts stay outside model context. The gateway emits only budgeted structural/symbol/external blocks with provenance and fingerprints. Session history can replace unchanged symbol bodies with small references.
+
+When work crosses an agent boundary, pass a reduced structured handoff rather than the previous agent's raw conversation/tool history. Keep large raw outputs in the Artifact Store and rehydrate only when needed.
+
+## Scheduling boundary
+
+Schedules are advisory. Only dependency-independent stages may execute in parallel. The reducer does not silently spawn external agents; execution requires a host/orchestrator provider.
 
 ## Enforcement boundary
 

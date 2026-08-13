@@ -10,6 +10,9 @@ from . import __version__
 from .admission import evaluate_read
 from .attribution import analyze_context_usage
 from .benchmark import benchmark_tasks, load_tasks
+from .artifact_store import ArtifactStore
+from .complexity import classify_complexity
+from .command_facade import FACADES, get_facade, list_facades
 from .capabilities import detect_providers, doctor, resolve_capability
 from .context_planner import build_context
 from .config import load_config, trust_provider, prefer_provider
@@ -17,15 +20,22 @@ from .delegate import delegate_capability
 from .external_context import load_external_file, canonicalize_external
 from .fanout import recommend_fanout
 from .git_utils import changed_files
+from .handoff import reduce_handoff
+from .grader import build_grade_packet, evaluate_grade
 from .graph import neighborhood
+from .host_adapters import install_host_commands, host_status
 from .indexer import build_persistent, ensure_index, index_status
 from .ledger import SessionLedger
+from .knowledge import build_knowledge_index, search_knowledge, knowledge_status
 from .lifecycle import ContextLifecycle
 from .parsers import summarize_source
+from .orchestration import plan_harness
 from .provider_health import ProviderHealth
+from .retry_policy import decide_retry
 from .ranking import rank_files
 from .router import route_task
 from .scanner import changed_view, dependency_view, module_map, project_map
+from .scheduler import build_schedule
 from .symbols import read_symbol
 from .task_budget import BudgetLimits, TaskBudget
 from .tool_policy import classify_command
@@ -90,6 +100,67 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--external-only", action="store_true", help="Use ingested external provider blocks without building the native repo index")
     context.add_argument("--external", action="append", default=[], metavar="PROVIDER:JSON",
                          help="Ingest external provider JSON through the context gateway before reasoning")
+    context.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"],
+                         help="Force a workflow intent instead of heuristic task routing")
+
+    run = sub.add_parser("run", help="Run a short reducer-* intent facade")
+    run.add_argument("facade", choices=list(FACADES))
+    run.add_argument("task", nargs="?", default="")
+    run.add_argument("--repo", default=".")
+    run.add_argument("--budget", type=int)
+    run.add_argument("--session", default="default")
+    run.add_argument("--pretty", action="store_true")
+
+    commands = sub.add_parser("commands", help="List the short reducer-* command facades")
+    commands.add_argument("--pretty", action="store_true")
+
+    hinstall = sub.add_parser("host-install", help="Install reducer-* shortcuts for Claude Code or Codex")
+    hinstall.add_argument("--host", required=True, choices=["claude-code", "codex"])
+    hinstall.add_argument("--scope", choices=["project", "global"], default="project")
+    hinstall.add_argument("--repo", default=".")
+    hinstall.add_argument("--dry-run", action="store_true")
+    hinstall.add_argument("--pretty", action="store_true")
+
+    hstatus = sub.add_parser("host-status", help="Show installed reducer-* host shortcuts")
+    hstatus.add_argument("--host", required=True, choices=["claude-code", "codex"])
+    hstatus.add_argument("--scope", choices=["project", "global"], default="project")
+    hstatus.add_argument("--repo", default=".")
+    hstatus.add_argument("--pretty", action="store_true")
+
+    complexity = sub.add_parser("complexity", help="Heuristically classify task complexity before deciding whether multi-agent work is justified")
+    complexity.add_argument("task"); complexity.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); complexity.add_argument("--pretty", action="store_true")
+
+    plan = sub.add_parser("plan", help="Build a provider-aware harness plan without executing agents")
+    plan.add_argument("task"); plan.add_argument("--repo", default="."); plan.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"])
+    plan.add_argument("--context-budget", type=int, default=12000); plan.add_argument("--output-budget", type=int, default=4000); plan.add_argument("--model-calls", type=int, default=10); plan.add_argument("--pretty", action="store_true")
+
+    schedule = sub.add_parser("schedule", help="Build a dependency-aware agent schedule; independent stages only may run in parallel")
+    schedule.add_argument("task"); schedule.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); schedule.add_argument("--pretty", action="store_true")
+
+    quality = sub.add_parser("quality", help="Advanced runtime API: build a reduced grader packet or validate a grader result")
+    quality.add_argument("action", choices=["packet", "evaluate"]); quality.add_argument("value"); quality.add_argument("input", nargs="?")
+    quality.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); quality.add_argument("--artifact-id")
+    quality.add_argument("--risk-level", choices=["low", "medium", "high", "critical"]); quality.add_argument("--pretty", action="store_true")
+
+    retry = sub.add_parser("retry-decision", help="Advanced runtime API: apply the bounded reject/retry/escalation policy")
+    retry.add_argument("decision", choices=["pass", "reject", "uncertain"]); retry.add_argument("--attempt", type=int, required=True)
+    retry.add_argument("--worker-tier", choices=["cheap", "standard", "strong"], required=True)
+    retry.add_argument("--risk-level", choices=["low", "medium", "high", "critical"], required=True)
+    retry.add_argument("--complexity-level", choices=["trivial", "focused", "complex", "autonomous"], required=True)
+    retry.add_argument("--force-escalation", action="store_true"); retry.add_argument("--pretty", action="store_true")
+
+    handoff = sub.add_parser("handoff", help="Reduce one agent result into a bounded structured handoff for another agent")
+    handoff.add_argument("from_role"); handoff.add_argument("to_role"); handoff.add_argument("input")
+    handoff.add_argument("--repo", default="."); handoff.add_argument("--task", default=""); handoff.add_argument("--store-artifact", action="store_true"); handoff.add_argument("--pretty", action="store_true")
+
+    artifact = sub.add_parser("artifact", help="Store large agent/tool outputs outside model context and retrieve compact metadata")
+    artifact.add_argument("action", choices=["put", "get", "list"]); artifact.add_argument("value", nargs="?")
+    artifact.add_argument("--repo", default="."); artifact.add_argument("--kind", default="agent-output"); artifact.add_argument("--producer", default="unknown")
+    artifact.add_argument("--payload", action="store_true", help="Include full payload when reading an artifact"); artifact.add_argument("--limit", type=int, default=50); artifact.add_argument("--pretty", action="store_true")
+
+    knowledge = sub.add_parser("knowledge", help="Local knowledge-memory fallback for docs/ADR text; external knowledge providers remain preferred when compatible")
+    knowledge.add_argument("action", choices=["index", "search", "status"]); knowledge.add_argument("query", nargs="?")
+    knowledge.add_argument("--repo", default="."); knowledge.add_argument("--top-k", type=int, default=8); knowledge.add_argument("--budget", type=int, default=1800); knowledge.add_argument("--pretty", action="store_true")
 
     ingest = sub.add_parser("ingest", help="Normalize/deduplicate an external provider JSON result")
     ingest.add_argument("provider"); ingest.add_argument("json_file"); ingest.add_argument("--pretty", action="store_true")
@@ -252,10 +323,95 @@ def _auto_delegate_trusted(root: pathlib.Path, route: dict[str, Any], task: str)
     return blocks, attempts, native_needed
 
 
+def _load_user_payload(value: str) -> Any:
+    p = pathlib.Path(value)
+    if p.is_file():
+        text = p.read_text(encoding="utf-8", errors="replace")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "inspect":
+        if args.command == "run":
+            spec = get_facade(args.facade)
+            if spec.mode == "doctor":
+                forwarded = ["doctor", args.repo]
+            else:
+                task = args.task.strip() or spec.default_task
+                forwarded = ["context", args.repo, task, "--budget", str(args.budget or spec.default_budget), "--session", args.session]
+                if spec.intent:
+                    forwarded.extend(["--intent", spec.intent])
+            if args.pretty:
+                forwarded.append("--pretty")
+            return main(forwarded)
+        if args.command == "commands":
+            result = {"commands": list_facades(), "human_interface": "Use /reducer-* in Claude Code after host-install; Codex gets named reducer-* skills."}
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
+        if args.command == "host-install":
+            result = install_host_commands(args.repo, args.host, scope=args.scope, dry_run=args.dry_run)
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
+        if args.command == "host-status":
+            result = host_status(args.repo, args.host, scope=args.scope)
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
+        if args.command == "complexity":
+            result = classify_complexity(args.task, args.intent)
+        elif args.command == "plan":
+            result = plan_harness(args.task, args.repo, forced_type=args.intent, context_tokens=args.context_budget, output_tokens=args.output_budget, model_calls=args.model_calls)
+        elif args.command == "schedule":
+            result = build_schedule(args.task, args.intent)
+        elif args.command == "quality":
+            if args.action == "packet":
+                if args.input is None:
+                    raise ValueError("quality packet requires TASK and INPUT")
+                result = build_grade_packet(args.value, _load_user_payload(args.input), task_type=args.intent, artifact_id=args.artifact_id)
+            else:
+                if not args.risk_level:
+                    raise ValueError("quality evaluate requires --risk-level")
+                payload = _load_user_payload(args.value)
+                if not isinstance(payload, dict):
+                    raise ValueError("quality evaluate expects a JSON object or JSON file")
+                result = evaluate_grade(payload, risk_level=args.risk_level)
+        elif args.command == "retry-decision":
+            result = decide_retry(decision=args.decision, attempt=args.attempt, worker_tier=args.worker_tier,
+                                  risk_level=args.risk_level, complexity_level=args.complexity_level,
+                                  force_escalation=args.force_escalation)
+        elif args.command == "handoff":
+            root = pathlib.Path(args.repo).resolve()
+            payload = _load_user_payload(args.input)
+            artifact_id = None
+            if args.store_artifact:
+                artifact_id = ArtifactStore(root).put(payload, kind="agent-output", producer=args.from_role)["id"]
+            result = reduce_handoff(payload, from_role=args.from_role, to_role=args.to_role, task=args.task, artifact_id=artifact_id)
+        elif args.command == "artifact":
+            store = ArtifactStore(pathlib.Path(args.repo).resolve())
+            if args.action == "put":
+                if not args.value: raise ValueError("artifact put requires a file path, JSON value, or text value")
+                result = store.put(_load_user_payload(args.value), kind=args.kind, producer=args.producer)
+            elif args.action == "get":
+                if not args.value: raise ValueError("artifact get requires an artifact id")
+                result = store.view(args.value, include_payload=args.payload)
+            else:
+                result = {"artifacts": store.list(args.limit)}
+        elif args.command == "knowledge":
+            if args.action == "index":
+                result = build_knowledge_index(args.repo)
+            elif args.action == "status":
+                result = knowledge_status(args.repo)
+            else:
+                if not args.query: raise ValueError("knowledge search requires a query")
+                result = search_knowledge(args.repo, args.query, top_k=args.top_k, budget=args.budget)
+        elif args.command == "inspect":
             result = inspect_file(args.path, args.max_file_bytes)
         elif args.command == "detect":
             result = detect_providers(args.path, required=args.capability, use_cache=not args.no_cache)
@@ -320,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
                 root = pathlib.Path(args.path).resolve()
                 run_id = args.run_id or new_run_id()
                 trace = Trace(root, run_id)
-                route = route_task(args.task, args.path)
+                route = route_task(args.task, args.path, forced_type=args.intent)
                 trace.event("route", route)
 
                 manual_blocks = _external_blocks(args.external)
@@ -349,6 +505,12 @@ def main(argv: list[str] | None = None) -> int:
                                        include_content=not args.structure_only, external_blocks=blocks)
                 result["route"] = route
                 result["run_id"] = run_id
+                result["orchestration"] = plan_harness(
+                    args.task, root, forced_type=args.intent,
+                    context_tokens=max(args.budget, 800), output_tokens=4000, model_calls=10,
+                    route_result=route,
+                )
+                result["orchestration"]["execution"] = "advisory-only; this command does not spawn agents"
                 result["provider_delegation"] = {
                     "attempts": delegation_attempts,
                     "manual_external_blocks": len(manual_blocks),
@@ -356,9 +518,16 @@ def main(argv: list[str] | None = None) -> int:
                     "native_index_used": native_index_used,
                 }
                 task_budget = TaskBudget(root, run_id, BudgetLimits(context_tokens=max(args.budget, 800)))
+                task_budget.configure_lanes(result["orchestration"]["lane_budget"]["lanes"])
                 tool_calls = 1 + len(delegation_attempts) + (1 if result.get("external_search", {}).get("used") else 0)
                 budget_state = task_budget.consume(context_tokens=result["budget"]["estimated_used_tokens"], tool_calls=tool_calls)
                 result["task_budget"] = budget_state
+                trace.event("routing-policy", {
+                    "complexity": result["orchestration"]["complexity"],
+                    "risk": result["orchestration"]["risk"],
+                    "model_roles": result["orchestration"]["model_policy"]["roles"],
+                    "retry_policy": result["orchestration"]["retry_policy"],
+                })
                 trace.event("context-pack", {
                     "estimated_tokens": result["budget"]["estimated_used_tokens"],
                     "files": len(result["files"]), "symbols": len(result["symbols"]),

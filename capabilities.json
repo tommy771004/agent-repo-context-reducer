@@ -2,7 +2,7 @@
   "schema": "repo-context-capabilities/v1",
   "provider": {
     "name": "agent-repo-context-reducer",
-    "version": "1.0.0"
+    "version": "1.3.0"
   },
   "provides": [
     "context.budget",
@@ -15,6 +15,18 @@
     "harness.replay",
     "harness.tool-policy",
     "harness.fanout-policy",
+    "quality.gate",
+    "context.lane-budget",
+    "harness.retry-policy",
+    "harness.model-routing",
+    "harness.risk-routing",
+    "knowledge.history",
+    "knowledge.search",
+    "context.artifact",
+    "context.handoff",
+    "orchestration.handoff",
+    "orchestration.scheduler",
+    "harness.complexity",
     "repository.index",
     "repository.graph",
     "repository.symbols",
@@ -29,7 +41,16 @@
       "context.dedup",
       "context.session",
       "context.lifecycle",
-      "context.provenance"
+      "context.provenance",
+      "context.handoff",
+      "context.artifact",
+      "harness.complexity",
+      "orchestration.scheduler",
+      "harness.risk-routing",
+      "harness.model-routing",
+      "harness.retry-policy",
+      "context.lane-budget",
+      "quality.gate"
     ],
     "fallback": [
       "repository.index",
@@ -39,6 +60,16 @@
       "repository.references",
       "repository.impact",
       "code.read-symbol"
+    ],
+    "external_optional": [
+      "knowledge.graph",
+      "executor.code",
+      "executor.autonomous",
+      "orchestration.parallel",
+      "model.cheap",
+      "model.standard",
+      "model.strong",
+      "quality.grader"
     ]
   }
 }

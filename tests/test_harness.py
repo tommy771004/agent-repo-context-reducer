@@ -7,6 +7,8 @@ import unittest
 import sys
 
 from repo_context.attribution import analyze_context_usage
+from repo_context.artifact_store import ArtifactStore
+from repo_context.complexity import classify_complexity
 from repo_context.benchmark import benchmark_tasks
 from repo_context.capabilities import detect_providers, resolve_capability, doctor
 from repo_context.external_context import canonicalize_external, deduplicate_blocks
@@ -15,6 +17,10 @@ from repo_context.config import trust_provider
 from repo_context.provider_health import ProviderHealth
 from repo_context.fanout import recommend_fanout
 from repo_context.lifecycle import ContextLifecycle
+from repo_context.handoff import reduce_handoff
+from repo_context.knowledge import build_knowledge_index, search_knowledge
+from repo_context.orchestration import plan_harness
+from repo_context.scheduler import build_schedule
 from repo_context.task_budget import BudgetLimits, TaskBudget
 from repo_context.tool_policy import classify_command
 from repo_context.trace import Trace, replay_summary
@@ -170,6 +176,62 @@ class HarnessTests(unittest.TestCase):
             result = benchmark_tasks(root, [{"task": "payment charge", "expected_paths": ["payment.py"]}], budget=1200)
             self.assertEqual(result["tasks"][0]["expected_path_recall"], 1.0)
             self.assertFalse(result["tasks"][0]["correctness_claim"])
+
+    def test_complexity_router_keeps_small_tasks_single_agent(self):
+        result = classify_complexity("Explain this function")
+        self.assertEqual(result["recommended_agents"], 1)
+        self.assertFalse(result["multi_agent_recommended"])
+
+    def test_complexity_router_marks_cross_cutting_task_complex(self):
+        result = classify_complexity("Refactor authentication across the repo and migrate the database integration")
+        self.assertIn(result["level"], {"complex", "autonomous"})
+        self.assertTrue(result["multi_agent_recommended"])
+
+    def test_artifact_store_keeps_payload_out_of_compact_view(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = ArtifactStore(td)
+            item = store.put({"summary": "x", "raw": "y" * 5000}, producer="researcher")
+            self.assertNotIn("payload", item)
+            loaded = store.get(item["id"])
+            self.assertEqual(loaded["payload"]["summary"], "x")
+
+    def test_handoff_reducer_selects_structured_keys(self):
+        payload = {"summary": "done", "decisions": ["use queue"], "debug_log": "x" * 10000}
+        result = reduce_handoff(payload, from_role="planner", to_role="implementer")
+        self.assertEqual(result["handoff"]["summary"], "done")
+        self.assertNotIn("debug_log", result["handoff"] )
+        self.assertTrue(result["provenance"]["lossy"])
+
+    def test_scheduler_only_parallelizes_independent_nodes(self):
+        result = build_schedule("Refactor authentication and migrate database integration across the repo", "debug")
+        nodes = {n["id"]: set(n["depends_on"]) for n in result["nodes"]}
+        for wave in result["waves"]:
+            for node in wave:
+                self.assertFalse(nodes[node] & set(wave))
+
+    def test_native_knowledge_fallback_is_docs_only_and_labeled(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            (root / "docs").mkdir()
+            (root / "docs" / "adr.md").write_text("# Payment decision\nUse an event queue for payment status updates.", encoding="utf-8")
+            (root / "secret.py").write_text("payment secret", encoding="utf-8")
+            built = build_knowledge_index(root)
+            self.assertEqual(built["documents"], 1)
+            result = search_knowledge(root, "payment queue")
+            self.assertEqual(result["results"][0]["path"], "docs/adr.md")
+            self.assertIn("not GraphRAG", result["limitations"] )
+
+    def test_executor_capability_stays_unresolved_without_provider(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = resolve_capability(pathlib.Path(td), "executor.autonomous")
+            self.assertIsNone(result["selected"])
+
+    def test_harness_plan_adds_executor_only_for_autonomous_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = plan_harness("Autonomously implement an end-to-end migration across the entire project and ship production-ready integration", td)
+            self.assertEqual(result["complexity"]["level"], "autonomous")
+            self.assertIn("executor.autonomous", result["capability_plan"]["optional"] )
+            self.assertIn("executor.autonomous", result["unresolved_optional_capabilities"] )
 
 
 if __name__ == "__main__":

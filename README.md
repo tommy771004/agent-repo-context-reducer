@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Task-aware repository navigation and context reduction for AI coding agents.
+  Provider-aware repository context reduction and information orchestration for AI coding agents.
 </p>
 
 <p align="center">
@@ -14,12 +14,13 @@
 </p>
 
 <p align="center">
+  <a href="#short-reducer-commands">Shortcuts</a> &bull;
   <a href="#installation">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#commands">Commands</a> &bull;
   <a href="#safety">Safety</a> &bull;
-  <a href="#limitations">Limitations</a>
+  <a href="#design-boundary">Design Boundary</a>
 </p>
 
 <p align="center">
@@ -87,6 +88,156 @@ The reducer is **deterministic preprocessing**. It does not call an LLM.
 | Cache | Reuses unchanged structural summaries across scans |
 | Safety | Skips secret-like paths, symlinks, generated code and oversized/binary files by default |
 
+## Harness Optimization in v1.3
+
+The reducer now treats repository context as one part of a larger **information orchestration** problem. It does not hard-code Kimi, OpenHands, GraphRAG, or any other stack. Instead it resolves capabilities by layer and reuses a compatible trusted provider when one exists.
+
+```text
+User task
+   |
+   v
+Task Complexity Router
+   |
+   +-- small task ------> single bounded worker
+   |
+   +-- larger task -----> dependency-aware schedule
+                          |
+                          +-- repository.*  -> code graph/index/search
+                          +-- knowledge.*   -> docs/history/knowledge providers
+                          +-- executor.*    -> external coding/autonomous agents
+                          +-- orchestration.* -> multi-agent frameworks
+                          +-- context.*     -> reducer budget/dedup/handoff/artifacts
+                                               |
+                                               v
+                                         Minimal context
+```
+
+Key additions:
+
+- **Deterministic-first Sorter** handles intent, complexity, risk, and capability routing in code with zero model calls by default; model escalation is considered only when deterministic routing is insufficient.
+- **Vendor-neutral Model Tier Router** uses abstract `cheap`, `standard`, and `strong` tiers instead of hard-coding Claude, GPT, Kimi, Gemini, or any other vendor model.
+- **Risk / Ambiguity Escalation** raises planner, worker, or grader tiers based on risk, blast radius, ambiguity, novelty, and cost of error.
+- **Per-lane Budgeting** gives Planner/Worker/Tester/Grader child allocations that stay inside the existing task-wide budget.
+- **Independent Quality Gate** grades reduced handoff/tests/evidence/risks instead of ingesting the worker's raw conversation.
+- **Bounded Retry** caps reject loops, escalates tiers when justified, and falls back to human review after the attempt budget is exhausted.
+- **Task Complexity Router** keeps trivial/focused work single-agent and only recommends multi-agent orchestration when the task crosses a complexity threshold.
+- **Dependency-aware Scheduler** emits execution waves and only parallelizes independent stages.
+- **Agent Handoff Reducer** strips raw subagent history down to decisions, evidence, targets, constraints, tests, risks and open questions.
+- **Artifact Store** keeps large agent/tool outputs under `.repo-context/artifacts/` so the main model receives metadata or a reduced view first.
+- **Knowledge Provider Layer** separates project memory from the native static code graph. The bundled fallback searches local docs/ADR text; it is explicitly **not GraphRAG**.
+- **Executor Provider Layer** allows external coding/autonomous agents to be selected by capability. If no trusted provider exists, unsupported executor capabilities remain unresolved instead of pretending the reducer can execute them natively.
+
+### Model tier routing and quality gate
+
+```text
+User task
+   |
+   v
+Deterministic router (0 model calls)
+   |
+   +-- complexity
+   +-- risk / ambiguity / novelty
+   +-- required capabilities
+   |
+   v
+Abstract model tier
+   +-- cheap     -> high-frequency, low-risk bounded work
+   +-- standard  -> normal implementation / reasoning
+   +-- strong    -> high-risk, ambiguous, architectural, final grading
+   |
+   v
+Dependency-aware lanes
+   |
+   v
+Artifact + handoff reducer
+   |
+   v
+Independent grader
+   +-- PASS
+   +-- RETRY (bounded)
+   +-- HUMAN REVIEW
+```
+
+`cheap`, `standard`, and `strong` are abstract tiers, not model names. A concrete model is resolved only when the host or a registered provider exposes a compatible `model.*` capability. Otherwise model selection remains advisory/unresolved; the reducer does not pretend it can switch models.
+
+The sorter does not use a cheap model by default because deterministic code is cheaper. A model is only a fallback when deterministic routing is insufficient and the host supports tier routing.
+
+### Code graph vs. knowledge graph
+
+These are intentionally different capabilities:
+
+| Layer | Examples of content | Reducer behavior |
+|---|---|---|
+| `repository.graph` | files, imports, reverse imports, symbol definitions | native static fallback available |
+| `knowledge.search` | README, docs, ADRs, architecture notes, changelog | native lexical fallback available |
+| `knowledge.graph` | entities/decisions/history relationships | external provider only unless a real compatible implementation is installed |
+| `executor.code` / `executor.autonomous` | coding/engineering execution | external provider only |
+
+This avoids rebuilding a second graph merely because an external knowledge or code-graph provider is already installed.
+
+Provider manifest templates are included under `examples/provider-layers/`. They intentionally omit executable commands: copy a template into `.repo-context/providers.d/`, add a real adapter for the installed tool, and trust it only after verifying the command contract.
+
+## Short Reducer Commands
+
+The public interface is intentionally small. Humans use intent commands; the Skill chooses workflows; the shared runtime handles provider detection, reuse, fallback, graph/index, deduplication and budgets.
+
+| Shortcut | Purpose | Internal routing |
+|---|---|---|
+| `/reducer-repo <task>` | General repository work | Automatic routing |
+| `/reducer-debug <task>` | Debug a bug or failure | Forced `debug` workflow |
+| `/reducer-impact <task>` | Analyze change impact | Forced `change-impact` workflow |
+| `/reducer-review <task>` | Review code or changes | Forced `review` workflow |
+| `/reducer-doctor` | Detect overlapping Skills/plugins/providers | Provider/capability doctor |
+
+The shortcuts do **not** create separate indexes or graphs. They all call the same `repo-context` runtime and the same persistent state.
+
+### Claude Code slash commands
+
+Install the project-local shortcuts once:
+
+```bash
+repo-context host-install --host claude-code --scope project --repo .
+```
+
+Or, when using the bundled Skill without installing the Python package:
+
+```bash
+python scripts/repo_context.py host-install --host claude-code --scope project --repo .
+```
+
+Then use, for example:
+
+```text
+/reducer-debug payment succeeds but order status stays pending
+/reducer-impact I changed PaymentService; what can break?
+/reducer-review review the current changes
+```
+
+Global install is also available with `--scope global`.
+
+### Codex named Skills
+
+Install the same facade names into the Codex Skill directory:
+
+```bash
+repo-context host-install --host codex --scope project --repo .
+```
+
+This creates `reducer-repo`, `reducer-debug`, `reducer-impact`, `reducer-review`, and `reducer-doctor` as named Skills. If the current Codex client exposes installed Skills through `@` mentions, you can use forms such as `@reducer-debug`; otherwise invoke/select the named Skill using the host's supported Skill UI.
+
+Check installation:
+
+```bash
+repo-context host-status --host claude-code --scope project --repo .
+repo-context host-status --host codex --scope project --repo .
+```
+
+The underlying stable facade API is also available for adapters:
+
+```bash
+repo-context run reducer-debug "payment succeeds but order status stays pending" --repo .
+```
+
 ## Installation
 
 ### Agent Skill — recommended
@@ -151,33 +302,26 @@ The runtime has no third-party Python dependencies.
 
 ## Quick Start
 
-After installing the Skill, ask your agent normally:
+After the host shortcuts are installed, use the intent facade instead of manually chaining low-level commands:
 
 ```text
-Read this entire project and explain its architecture.
+/reducer-repo explain this project's architecture
+/reducer-debug payment succeeds but order status is sometimes not updated
+/reducer-impact I changed PaymentService; what can break?
+/reducer-review review the current changes
 ```
 
-The Skill tells the agent to start with:
+The facade performs task/complexity routing, capability detection, provider reuse, native fallback where implemented, and bounded context planning through one shared runtime.
+
+If the host does not expose slash/named-Skill shortcuts, call the stable facade API directly:
 
 ```bash
-python scripts/repo_context.py map <repo> --pretty
-```
-
-For a task-specific prompt:
-
-```text
-Find why payment succeeds but order status is sometimes not updated.
-```
-
-Prefer:
-
-```bash
-python scripts/repo_context.py query <repo> \
+repo-context run reducer-debug \
   "payment succeeds but order status is not updated" \
-  --top-k 20 --pretty
+  --repo . --pretty
 ```
 
-Then inspect only the ranked files that are actually relevant.
+Low-level `map`, `query`, `deps`, `symbol`, `knowledge`, `handoff`, and similar commands remain available for adapters and advanced workflows.
 
 ## How It Works
 
@@ -243,6 +387,73 @@ repo-context inspect src/services/payment.ts --pretty
 The structural map helps the agent decide whether a full source read is needed. Exact implementation reasoning still belongs to the coding agent.
 
 ## Commands
+
+### `run` — short facade API
+
+Host adapters call one stable facade command instead of exposing the low-level workflow:
+
+```bash
+repo-context run reducer-repo "understand this repository" --repo .
+repo-context run reducer-debug "payment succeeds but order stays pending" --repo .
+repo-context run reducer-impact "I changed PaymentService" --repo .
+repo-context run reducer-review "review the current changes" --repo .
+repo-context run reducer-doctor --repo .
+```
+
+List the available facades:
+
+```bash
+repo-context commands --pretty
+```
+
+### `host-install` / `host-status`
+
+Install or inspect the human-facing shortcuts:
+
+```bash
+repo-context host-install --host claude-code --scope project --repo .
+repo-context host-install --host codex --scope project --repo .
+repo-context host-status --host claude-code --scope project --repo .
+```
+
+The lower-level commands below remain available for runtime debugging, custom integrations and advanced workflows.
+
+### Harness planning, handoff, artifacts and knowledge
+
+These are runtime APIs used by advanced integrations; normal users can keep using `/reducer-*`.
+
+```bash
+# Decide whether multi-agent work is justified
+repo-context complexity "refactor authentication across the repo" --pretty
+
+# Resolve capabilities and build risk/model-tier/lane-budget/quality/retry policy
+repo-context plan "refactor authentication across the repo" --repo . --context-budget 6000 --pretty
+
+# Produce dependency-aware execution waves
+repo-context schedule "implement OAuth across the app" --pretty
+
+# Reduce a planner result before passing it to a coder
+repo-context handoff planner implementer planner-result.json --repo . --store-artifact --pretty
+
+# Build a reduced grader packet without forwarding the worker's raw conversation
+repo-context quality packet "review payment change" worker-result.json --intent review --pretty
+
+# Validate a grader JSON result
+repo-context quality evaluate grader-result.json --risk-level high --pretty
+
+# Apply the bounded retry / tier-escalation policy
+repo-context retry-decision reject --attempt 1 --worker-tier standard --risk-level high --complexity-level complex --pretty
+
+# Persist large outputs outside model context
+repo-context artifact put research-result.json --repo . --producer researcher --pretty
+repo-context artifact list --repo . --pretty
+
+# Local docs/ADR memory fallback
+repo-context knowledge index --repo . --pretty
+repo-context knowledge search "why did we choose event queues?" --repo . --pretty
+```
+
+`plan` and `schedule` are advisory: the reducer does not silently spawn agents or invent a concrete model mapping for `cheap`/`standard`/`strong`. External model/executor/orchestrator providers must still be exposed through compatible manifests/adapters and pass the existing trust policy.
 
 ### `map`
 
@@ -519,11 +730,24 @@ agent-repo-context-reducer/
 │   ├── git_utils.py
 │   ├── workspaces.py
 │   ├── cache.py
+│   ├── complexity.py
+│   ├── risk.py
+│   ├── model_router.py
+│   ├── lane_budget.py
+│   ├── scheduler.py
+│   ├── grader.py
+│   ├── retry_policy.py
+│   ├── handoff.py
+│   ├── artifact_store.py
+│   ├── knowledge.py
+│   ├── orchestration.py
 │   └── util.py
 ├── scripts/
 │   └── repo_context.py
 ├── references/
-│   └── architecture.md
+│   ├── architecture.md
+│   ├── harness/
+│   └── providers/
 ├── examples/
 │   └── sample-project/
 └── tests/
@@ -559,6 +783,14 @@ This project answers:
 
 > Where should the agent look next?
 
+> Should this task stay single-agent or expand into a dependency-aware workflow?
+
+> What information should cross an agent handoff boundary?
+
+> Which abstract model tier is justified by complexity/risk, and how much budget should each execution lane receive?
+
+> Has an independent grader supplied enough evidence to pass the deterministic quality threshold, retry, or escalate?
+
 It does **not** claim to answer:
 
 > Is this implementation correct?
@@ -567,7 +799,9 @@ It does **not** claim to answer:
 
 > What business behavior was intended?
 
-Those require reasoning over the selected full source, tests and runtime evidence.
+> Which concrete vendor model should `cheap` / `standard` / `strong` map to when the host exposes no such mapping?
+
+Those require reasoning over the selected full source, tests and runtime evidence. The reducer also does not claim that an installed knowledge provider is equivalent to a code graph, or that an unresolved executor capability can be provided natively.
 
 ## Philosophy
 

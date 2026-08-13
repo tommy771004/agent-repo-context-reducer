@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  為 AI Coding Agent 提供任務導向的 Repository 導航與 Context 縮減。
+  為 AI Coding Agent 提供 Provider-aware Repository Context 縮減與資訊編排。
 </p>
 
 <p align="center">
@@ -14,6 +14,7 @@
 </p>
 
 <p align="center">
+  <a href="#reducer-短指令">短指令</a> &bull;
   <a href="#安裝">安裝</a> &bull;
   <a href="#快速開始">快速開始</a> &bull;
   <a href="#運作原理">運作原理</a> &bull;
@@ -87,6 +88,154 @@ Reducer 屬於 **deterministic preprocessing（確定性前處理）**，本身�
 | Cache | 重用未變更檔案的 structural summaries |
 | Safety | 預設略過疑似 secrets、symlink、generated code、oversized/binary files |
 
+## v1.3 Harness 優化
+
+Reducer 現在把 Repository Context 視為更大的 **Information Orchestration（資訊編排）** 問題，而不是把 Kimi、OpenHands、GraphRAG 或任何特定 Stack 寫死進核心。Runtime 會依 capability 分層；有相容且受信任的 Provider 就重用，沒有時才使用自己真正具備的 fallback。
+
+```text
+User Task
+   |
+   v
+Task Complexity Router
+   |
+   +-- 小任務 ---------> 單一 bounded worker
+   |
+   +-- 複雜任務 -------> dependency-aware schedule
+                          |
+                          +-- repository.*      -> code graph/index/search
+                          +-- knowledge.*       -> docs/history/knowledge provider
+                          +-- executor.*        -> 外部 coding/autonomous agent
+                          +-- orchestration.*   -> multi-agent framework
+                          +-- context.*         -> budget/dedup/handoff/artifact
+                                                   |
+                                                   v
+                                             Minimal Context
+```
+
+新增核心能力：
+
+- **Deterministic-first Sorter**：intent／complexity／risk／capability routing 優先由程式碼完成，預設 0 model call；只有 deterministic routing 不足時才考慮模型 escalation。
+- **Vendor-neutral Model Tier Router**：用 `cheap`／`standard`／`strong` 抽象層級，而不是把 Claude、GPT、Kimi、Gemini 等具體型號寫死。
+- **Risk / Ambiguity Escalation**：依風險、blast radius、ambiguity、novelty 與 cost of error 提升 planner／worker／grader tier。
+- **Per-lane Budget**：Planner、Worker、Tester、Grader 各自拿 child budget，但總和不會突破原本 task-wide budget。
+- **Independent Quality Gate**：Grader 只收到 reduced handoff／tests／evidence／risks，不直接吞 Worker 的完整 conversation。
+- **Bounded Retry**：Reject loop 有最大 attempt；需要時升 tier，耗盡後交回 human review，不允許無限重試。
+- **Task Complexity Router**：小型任務維持 single-agent；只有跨模組、整合、重構等較複雜任務才建議 multi-agent。
+- **Dependency-aware Scheduler**：產生依賴 wave，只有互相獨立的階段才能平行。
+- **Agent Handoff Reducer**：不把完整 subagent conversation 傳給下一個 Agent，只保留 decisions、evidence、targets、constraints、tests、risks、open questions。
+- **Artifact Store**：大型 Agent／Tool output 存在 `.repo-context/artifacts/`，主模型先拿 compact metadata 或 reduced handoff。
+- **Knowledge Provider Layer**：把長期 Project Memory 與 native static Code Graph 分離；內建 fallback 只做本機 docs／ADR lexical search，**不是 GraphRAG**。
+- **Executor Provider Layer**：Kimi、OpenHands、Codex、Claude 等都應透過 capability provider 接入，而不是核心 dependency。沒有 trusted provider 時，unsupported executor capability 會保持 unresolved，不會假裝 native 可執行。
+
+### Model Tier Routing 與 Quality Gate
+
+```text
+User Task
+   |
+   v
+Deterministic Router (0 model calls)
+   |
+   +-- complexity
+   +-- risk / ambiguity / novelty
+   +-- required capabilities
+   |
+   v
+Abstract model tier
+   +-- cheap     -> 高頻、低風險、bounded work
+   +-- standard  -> 一般 implementation / reasoning
+   +-- strong    -> 高風險、模糊、架構決策、final grading
+   |
+   v
+Dependency-aware lanes
+   |
+   v
+Artifact + Handoff Reducer
+   |
+   v
+Independent Grader
+   +-- PASS
+   +-- RETRY (bounded)
+   +-- HUMAN REVIEW
+```
+
+`cheap`／`standard`／`strong` 是抽象 tier，不是模型名稱。只有 Host 或已註冊 Provider 真的提供 `model.*` capability 時，Reducer 才能解析到具體模型；否則保持 advisory/unresolved，不會假裝自動切模型。
+
+Sorter 預設不用 cheap model，因為 deterministic code 更便宜。只有 deterministic 規則無法處理且 Host 支援 tier routing 時，才把模型當 fallback。
+
+### Code Graph 與 Knowledge Graph 分離
+
+| Layer | 內容例子 | Reducer 行為 |
+|---|---|---|
+| `repository.graph` | file、import、reverse import、symbol definition | 有 native static fallback |
+| `knowledge.search` | README、docs、ADR、architecture notes、changelog | 有 native lexical fallback |
+| `knowledge.graph` | 決策／實體／歷史關係 | 沒有真實相容實作時只使用 external provider |
+| `executor.code` / `executor.autonomous` | Coding／Autonomous engineering execution | external provider only |
+
+因此即使環境已經有更強的 Graph 或 Memory Skill，Reducer 也不需要再建立第二套相同能力。
+
+`examples/provider-layers/` 內附 capability manifest 範本，但刻意不附可執行 command。要接入外部工具時，先把範本放到 `.repo-context/providers.d/`，再加入真正符合該工具的 adapter，確認 command contract 後才加入 trust。
+
+## Reducer 短指令
+
+對外介面刻意保持簡單：使用者只需要表達 intent；Skill 負責選 workflow；共用 runtime 再處理 Provider 偵測／重用、fallback、graph/index、去重與 budget。
+
+| 短指令 | 用途 | 內部 Routing |
+|---|---|---|
+| `/reducer-repo <task>` | 一般 Repository 任務 | 自動判斷 workflow |
+| `/reducer-debug <task>` | 除錯、找 bug | 強制 `debug` workflow |
+| `/reducer-impact <task>` | 分析修改影響 | 強制 `change-impact` workflow |
+| `/reducer-review <task>` | Code / change review | 強制 `review` workflow |
+| `/reducer-doctor` | 檢查 Skill／Plugin／Provider 重疊 | Provider capability doctor |
+
+這些短指令**不會各自建立第二套 index 或 graph**；全部共用同一個 `repo-context` runtime 與同一份 persistent state。
+
+### Claude Code Slash Commands
+
+只要安裝一次專案層級的快捷指令：
+
+```bash
+repo-context host-install --host claude-code --scope project --repo .
+```
+
+若只有安裝 Skill、沒有把 Python CLI 裝到 PATH，也可以：
+
+```bash
+python scripts/repo_context.py host-install --host claude-code --scope project --repo .
+```
+
+之後即可：
+
+```text
+/reducer-debug payment 成功但 order status 一直 pending
+/reducer-impact 我修改了 PaymentService，會影響哪些地方？
+/reducer-review review 目前的修改
+```
+
+要全域安裝可改成 `--scope global`。
+
+### Codex Named Skills
+
+把相同的 facade 名稱安裝到 Codex Skills 目錄：
+
+```bash
+repo-context host-install --host codex --scope project --repo .
+```
+
+會建立 `reducer-repo`、`reducer-debug`、`reducer-impact`、`reducer-review`、`reducer-doctor` 五個命名 Skill。若目前使用的 Codex 客戶端有把已安裝 Skill 暴露成 `@` mention，就可以使用 `@reducer-debug` 這類形式；否則請使用該客戶端正式提供的 Skill 選擇／呼叫方式。
+
+檢查安裝狀態：
+
+```bash
+repo-context host-status --host claude-code --scope project --repo .
+repo-context host-status --host codex --scope project --repo .
+```
+
+其他 host adapter 也可以直接使用穩定的 facade API：
+
+```bash
+repo-context run reducer-debug "payment 成功但 order status 一直 pending" --repo .
+```
+
 ## 安裝
 
 ### Agent Skill — 建議方式
@@ -151,33 +300,26 @@ Runtime 不需要任何第三方 Python dependency。
 
 ## 快速開始
 
-安裝 Skill 後，可以照平常方式向 Agent 下 Prompt：
+安裝 Host 快捷入口後，直接使用 intent facade，不需要自己串接低階指令：
 
 ```text
-Read this entire project and explain its architecture.
+/reducer-repo 解釋這個專案的架構
+/reducer-debug payment 成功但 order status 偶爾沒有更新
+/reducer-impact 我修改了 PaymentService，會影響哪些地方？
+/reducer-review review 目前的修改
 ```
 
-Skill 會要求 Agent 優先執行：
+Facade 會透過同一個 Runtime 完成 task／complexity routing、capability detection、Provider 重用、真正具備能力時的 native fallback，以及 bounded context planning。
+
+如果 Host 沒有提供 slash command／named Skill shortcut，也可以直接呼叫穩定 facade API：
 
 ```bash
-python scripts/repo_context.py map <repo> --pretty
-```
-
-針對特定任務：
-
-```text
-Find why payment succeeds but order status is sometimes not updated.
-```
-
-建議先執行：
-
-```bash
-python scripts/repo_context.py query <repo> \
+repo-context run reducer-debug \
   "payment succeeds but order status is not updated" \
-  --top-k 20 --pretty
+  --repo . --pretty
 ```
 
-接著只深入讀取排名結果中真正相關的檔案。
+`map`、`query`、`deps`、`symbol`、`knowledge`、`handoff` 等低階命令仍保留給 adapter 與進階 workflow 使用。
 
 ## 運作原理
 
@@ -243,6 +385,73 @@ repo-context inspect src/services/payment.ts --pretty
 Structural Map 的目的是幫助 Agent 判斷「是否真的需要全文」。真正涉及 implementation semantics 的推理仍由 Coding Agent 負責。
 
 ## 指令
+
+### `run` — 短指令 Facade API
+
+Host adapter 只呼叫一個穩定 facade，不把底層 workflow 暴露給使用者：
+
+```bash
+repo-context run reducer-repo "理解這個 repository" --repo .
+repo-context run reducer-debug "payment 成功但 order 一直 pending" --repo .
+repo-context run reducer-impact "我修改了 PaymentService" --repo .
+repo-context run reducer-review "review 目前修改" --repo .
+repo-context run reducer-doctor --repo .
+```
+
+列出全部 facade：
+
+```bash
+repo-context commands --pretty
+```
+
+### `host-install` / `host-status`
+
+安裝或檢查人類可直接使用的快捷入口：
+
+```bash
+repo-context host-install --host claude-code --scope project --repo .
+repo-context host-install --host codex --scope project --repo .
+repo-context host-status --host claude-code --scope project --repo .
+```
+
+以下底層命令仍保留給 runtime 除錯、自訂 integration 與進階 workflow 使用。
+
+### Harness Planning、Handoff、Artifact 與 Knowledge
+
+以下屬於進階 Runtime API；一般使用者仍只需要 `/reducer-*`。
+
+```bash
+# 判斷是否值得啟動 multi-agent
+repo-context complexity "重構整個專案的 authentication" --pretty
+
+# 建立 provider-aware harness plan（包含 risk / model tier / lane budget / quality gate / retry policy）
+repo-context plan "重構整個專案的 authentication" --repo . --context-budget 6000 --pretty
+
+# 產生 dependency-aware execution waves
+repo-context schedule "在整個 app 加入 OAuth" --pretty
+
+# Planner → Implementer 前先縮減 handoff
+repo-context handoff planner implementer planner-result.json --repo . --store-artifact --pretty
+
+# 產生 reduced grader packet，不把 Worker 原始 conversation 直接塞給 Grader
+repo-context quality packet "review payment change" worker-result.json --intent review --pretty
+
+# 驗證 Grader JSON 結果
+repo-context quality evaluate grader-result.json --risk-level high --pretty
+
+# 套用 bounded retry / tier escalation
+repo-context retry-decision reject --attempt 1 --worker-tier standard --risk-level high --complexity-level complex --pretty
+
+# 大型 output 存到 context 外
+repo-context artifact put research-result.json --repo . --producer researcher --pretty
+repo-context artifact list --repo . --pretty
+
+# 本機 docs／ADR knowledge fallback
+repo-context knowledge index --repo . --pretty
+repo-context knowledge search "為什麼當初選 event queue？" --repo . --pretty
+```
+
+`plan` 與 `schedule` 只產生 advisory plan；Reducer 不會偷偷 spawn Agent，也不會自行假設某個具體模型對應 `cheap`／`standard`／`strong`。外部 Model／Executor／Orchestrator 仍必須透過相容 manifest/adapter，並通過既有 trust policy。
 
 ### `map`
 
@@ -520,11 +729,24 @@ agent-repo-context-reducer/
 │   ├── git_utils.py
 │   ├── workspaces.py
 │   ├── cache.py
+│   ├── complexity.py
+│   ├── risk.py
+│   ├── model_router.py
+│   ├── lane_budget.py
+│   ├── scheduler.py
+│   ├── grader.py
+│   ├── retry_policy.py
+│   ├── handoff.py
+│   ├── artifact_store.py
+│   ├── knowledge.py
+│   ├── orchestration.py
 │   └── util.py
 ├── scripts/
 │   └── repo_context.py
 ├── references/
-│   └── architecture.md
+│   ├── architecture.md
+│   ├── harness/
+│   └── providers/
 ├── examples/
 │   └── sample-project/
 └── tests/
@@ -560,6 +782,14 @@ Runtime 刻意維持零第三方 dependency，讓 Skill 能直接在 Coding Agen
 
 > Agent 下一步應該看哪裡？
 
+> 這個 Task 應維持 single-agent，還是依 dependency 展開？
+
+> Agent handoff 邊界應該傳哪些資訊？
+
+> 依 complexity／risk，應使用哪個抽象 model tier，以及每個 lane 可用多少 budget？
+
+> Independent Grader 的結果應 PASS、RETRY 還是 ESCALATE？
+
 它不宣稱直接回答：
 
 > 這個 implementation 一定正確嗎？
@@ -567,6 +797,8 @@ Runtime 刻意維持零第三方 dependency，讓 Skill 能直接在 Coding Agen
 > 這份程式碼一定安全嗎？
 
 > 原本預期的 business behavior 是什麼？
+
+> Host 沒有提供 model mapping 時，`cheap`／`standard`／`strong` 應該硬對應到哪個廠商模型？
 
 這些問題仍需要對選中的完整 Source、Tests 與 Runtime Evidence 進行推理。
 

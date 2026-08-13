@@ -1,11 +1,16 @@
 {
   "name": "agent-repo-context-reducer-skill",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "private": true,
-  "description": "Provider-aware Agent Skill and zero-dependency Python harness for repository context control.",
+  "description": "Provider-aware Agent Skill and zero-dependency Python harness for repository context reduction and information orchestration.",
   "scripts": {
     "test": "python -m unittest discover -s tests -v",
     "demo": "python scripts/repo_context.py context examples/sample-project \"payment checkout order\" --budget 1800 --pretty",
-    "doctor": "python scripts/repo_context.py doctor examples/sample-project --pretty"
+    "doctor": "python scripts/repo_context.py doctor examples/sample-project --pretty",
+    "commands": "python scripts/repo_context.py commands --pretty",
+    "host:claude": "python scripts/repo_context.py host-install --host claude-code --scope project --repo . --pretty",
+    "host:codex": "python scripts/repo_context.py host-install --host codex --scope project --repo . --pretty",
+    "plan": "python scripts/repo_context.py plan \"Refactor authentication across the repo\" --repo . --pretty",
+    "knowledge": "python scripts/repo_context.py knowledge status --repo . --pretty"
   }
 }
