@@ -113,6 +113,94 @@ def install_host_commands(
     }
 
 
+def _shortcut_path(target: pathlib.Path, host: str, name: str) -> pathlib.Path:
+    return target / f"{name}.md" if host == "claude-code" else target / name / "SKILL.md"
+
+
+def _render(spec: FacadeCommand, host: str, runtime: str) -> str:
+    return render_claude_command(spec, runtime) if host == "claude-code" else render_codex_skill(spec, runtime)
+
+
+def _is_generated(text: str, spec: FacadeCommand, host: str, root: pathlib.Path) -> bool:
+    """True when the file still matches output this project would produce.
+
+    Both the portable project runtime and the machine-local global runtime are accepted so
+    that shortcuts installed under either scope remain removable.
+    """
+    candidates = {PORTABLE_PROJECT_RUNTIME, _global_runtime_command(root)}
+    return any(text == _render(spec, host, runtime) for runtime in candidates)
+
+
+def uninstall_host_commands(
+    repo: str | pathlib.Path,
+    host: str,
+    scope: str = "project",
+    yes: bool = False,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Remove reducer-* shortcuts this project installed.
+
+    Only the five known facade names are considered; the target directory is never scanned
+    or removed wholesale. Files that no longer match generated output are reported as
+    `modified` and skipped unless `force` is set.
+    """
+    root = pathlib.Path(repo).resolve()
+    target = _target(host, scope, root)
+    planned: list[dict[str, Any]] = []
+    for spec in FACADES.values():
+        path = _shortcut_path(target, host, spec.name)
+        if not path.exists():
+            planned.append({"name": spec.name, "path": str(path), "state": "absent", "action": "skip"})
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            planned.append({"name": spec.name, "path": str(path), "state": "unreadable",
+                            "action": "skip", "warning": str(exc)})
+            continue
+        generated = _is_generated(text, spec, host, root)
+        state = "generated" if generated else "modified"
+        action = "remove" if (generated or force) else "skip"
+        planned.append({"name": spec.name, "path": str(path), "state": state, "action": action})
+
+    removed: list[str] = []
+    if yes:
+        for item in planned:
+            if item["action"] != "remove":
+                continue
+            path = pathlib.Path(item["path"])
+            try:
+                path.unlink()
+                removed.append(item["path"])
+            except OSError as exc:
+                item["action"] = "failed"
+                item["warning"] = str(exc)
+                continue
+            # Codex skills live in a per-skill directory; drop it when it becomes empty.
+            if host == "codex":
+                try:
+                    path.parent.rmdir()
+                except OSError:
+                    pass
+    modified = [i["name"] for i in planned if i["state"] == "modified"]
+    return {
+        "host": host,
+        "scope": scope,
+        "target": str(target),
+        "dry_run": not yes,
+        "planned": planned,
+        "removed": removed,
+        "skipped_modified": modified,
+        "note": (
+            "Dry run: nothing was removed. Re-run with --yes to apply."
+            if not yes else "Removal applied."
+        ) + (
+            f" {len(modified)} shortcut(s) differ from generated output and were kept; use --force to remove them."
+            if modified and not force else ""
+        ),
+    }
+
+
 def host_status(repo: str | pathlib.Path, host: str, scope: str = "project") -> dict[str, Any]:
     root = pathlib.Path(repo).resolve()
     target = _target(host, scope, root)

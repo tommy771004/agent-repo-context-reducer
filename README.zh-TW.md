@@ -437,6 +437,49 @@ repo-context commands --pretty
 repo-context host-install --host claude-code --scope project --repo .
 repo-context host-install --host codex --scope project --repo .
 repo-context host-status --host claude-code --scope project --repo .
+repo-context host-uninstall --host claude-code --scope project --repo .
+```
+
+`host-uninstall` 預設是 dry run，加 `--yes` 才真的刪除。它只處理五個 `reducer-*` 名稱、絕不掃描整個目標目錄，且安裝後被你改過的 shortcut 會被保留，除非加上 `--force`。
+
+### `update` / `remove` — 套件管理器碰不到的部分
+
+套件層級的安裝本來就有自己的生命週期：`npx skills update|remove` 管 Skill 套件，`pip` 管 `repo-context` 這個 console command。但兩者都不知道 `host-install` 寫出的 slash-command 檔案，也不知道這個 runtime 在每個被掃描過的 repository 裡建立的 `.repo-context/` state。這兩個指令維護的就是這一塊。
+
+```bash
+# 刷新 persistent index，並重新產生「已安裝」的 shortcut
+repo-context update --repo . --target all --pretty
+
+# 只重新產生 shortcut（原本沒安裝的不會被偷裝）
+repo-context update --repo . --target shortcuts
+
+# 印出更新發行版本身該下的套件管理器指令
+repo-context update --target self
+```
+
+`--target self` 只**印出**指令，永遠不會執行——本 runtime 沒有第三方相依，也不會呼叫套件管理器。
+
+```bash
+# Dry run：顯示將被刪除的項目
+repo-context remove --repo . --target state --pretty
+
+# 實際執行
+repo-context remove --repo . --target state --yes
+```
+
+移除**預設是 dry run**，且 `.repo-context/` 會分級處理：
+
+| 類別 | 內容 | 由誰刪除 |
+|---|---|---|
+| 可再生 | `index.json`、`cache/`、`sessions/`、`runs/`、`budgets/`、`lifecycle/`、`provider-health.json`、`knowledge.json` | `--target state --yes` |
+| 使用者設定與資料 | `config.json`（provider trust）、`providers.json`、`providers.d/`、`artifacts/` | 只有加 `--all` 才會 |
+
+`.repo-context/` 內任何無法識別的項目一律回報並保留，不會刪除。其他 target：
+
+```bash
+repo-context remove --repo . --target shortcuts --yes     # 已安裝的 /reducer-* 檔案
+repo-context remove --repo . --target artifacts --yes     # 已儲存的 agent／tool output
+repo-context artifact remove <artifact-id> --repo .       # 單一 artifact
 ```
 
 以下底層命令仍保留給 runtime 除錯、自訂 integration 與進階 workflow 使用。

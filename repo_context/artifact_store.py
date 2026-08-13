@@ -75,6 +75,14 @@ class ArtifactStore:
             out["preview"] = payload[:280] + ("…" if len(payload) > 280 else "")
         return out
 
+    def remove(self, artifact_id: str) -> dict[str, Any]:
+        path = self._path(artifact_id)
+        try:
+            path.unlink()
+        except FileNotFoundError as exc:
+            raise ValueError(f"Artifact not found: {artifact_id}") from exc
+        return {"id": artifact_id, "removed": True, "path": str(path)}
+
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         if not self.dir.exists():
             return []

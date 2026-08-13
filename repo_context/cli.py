@@ -22,7 +22,11 @@ from .external_context import load_external_file
 from .fanout import recommend_fanout
 from .handoff import reduce_handoff
 from .grader import build_grade_packet, evaluate_grade
-from .host_adapters import install_host_commands, host_status
+from .host_adapters import install_host_commands, host_status, uninstall_host_commands
+from .maintenance import (
+    HOSTS, remove_artifacts, remove_shortcuts, remove_state, self_update_hint,
+    state_inventory, update_index, update_shortcuts,
+)
 from .indexer import build_persistent, ensure_index, index_status
 from .knowledge import build_knowledge_index, search_knowledge, knowledge_status
 from .lifecycle import ContextLifecycle
@@ -44,6 +48,51 @@ def _budget_for(args: argparse.Namespace) -> TaskBudget:
                           tool_calls=args.limit_tools, model_calls=args.limit_models,
                           subagents=args.limit_subagents, wall_seconds=args.limit_wall)
     return TaskBudget(pathlib.Path(args.path).resolve(), args.run_id, limits=limits)
+
+
+def _hosts_and_scopes(args: argparse.Namespace) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    hosts = tuple(args.host) if args.host else HOSTS
+    scopes = tuple(args.scope) if args.scope else ("project",)
+    return hosts, scopes
+
+
+def _handle_update(args: argparse.Namespace) -> dict[str, Any]:
+    hosts, scopes = _hosts_and_scopes(args)
+    sections: dict[str, Any] = {}
+    if args.target in {"all", "index"}:
+        if args.dry_run:
+            sections["index"] = {"target": "index", "dry_run": True, **index_status(pathlib.Path(args.repo).resolve())}
+        else:
+            sections["index"] = update_index(
+                args.repo, max_files=args.max_files, max_file_bytes=args.max_file_bytes,
+                include_hidden=args.include_hidden, use_cache=not args.no_cache,
+                include_generated=args.include_generated,
+            )
+    if args.target in {"all", "shortcuts"}:
+        sections["shortcuts"] = update_shortcuts(args.repo, hosts=hosts, scopes=scopes, dry_run=args.dry_run)
+    if args.target in {"all", "self"}:
+        sections["self"] = self_update_hint(args.repo)
+    return {"command": "update", "target": args.target, "dry_run": args.dry_run, **sections}
+
+
+def _handle_remove(args: argparse.Namespace) -> dict[str, Any]:
+    hosts, scopes = _hosts_and_scopes(args)
+    sections: dict[str, Any] = {}
+    if args.target in {"all", "state"}:
+        sections["state"] = remove_state(args.repo, yes=args.yes, include_preserved=args.include_preserved)
+    if args.target in {"all", "shortcuts"}:
+        sections["shortcuts"] = remove_shortcuts(args.repo, hosts=hosts, scopes=scopes, yes=args.yes, force=args.force)
+    if args.target in {"all", "artifacts"} or (args.target == "state" and args.include_preserved):
+        sections["artifacts"] = remove_artifacts(args.repo, yes=args.yes) if args.target != "state" else {
+            "target": "artifacts", "note": "Removed as part of --all state removal."
+        }
+    return {
+        "command": "remove",
+        "target": args.target,
+        "dry_run": not args.yes,
+        "inventory": state_inventory(args.repo) if args.target in {"all", "state"} else None,
+        **sections,
+    }
 
 
 def _load_user_payload(value: str) -> Any:
@@ -87,6 +136,18 @@ def main(argv: list[str] | None = None) -> int:
             result = host_status(args.repo, args.host, scope=args.scope)
             print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
             return 0
+        if args.command == "host-uninstall":
+            result = uninstall_host_commands(args.repo, args.host, scope=args.scope, yes=args.yes, force=args.force)
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
+        if args.command == "update":
+            result = _handle_update(args)
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
+        if args.command == "remove":
+            result = _handle_remove(args)
+            print(json.dumps(result, ensure_ascii=False, indent=2 if args.pretty else None, separators=None if args.pretty else (",", ":")))
+            return 0
         if args.command == "complexity":
             result = classify_complexity(args.task, args.intent)
         elif args.command == "plan":
@@ -124,6 +185,9 @@ def main(argv: list[str] | None = None) -> int:
             elif args.action == "get":
                 if not args.value: raise ValueError("artifact get requires an artifact id")
                 result = store.view(args.value, include_payload=args.payload)
+            elif args.action == "remove":
+                if not args.value: raise ValueError("artifact remove requires an artifact id")
+                result = store.remove(args.value)
             else:
                 result = {"artifacts": store.list(args.limit)}
         elif args.command == "knowledge":

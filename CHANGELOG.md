@@ -8,6 +8,11 @@
 - Added structural extraction for C/C++ (`#include`, definitions), shell (`source`, both function forms), PowerShell (`Import-Module`, dot-sourcing, hyphenated names) and SQL (`CREATE TABLE/VIEW/TYPE/PROCEDURE/FUNCTION`). These languages previously contributed no imports, symbols or dependency-graph edges despite being listed as supported.
 - Enabled `repo-context symbol` reading for C/C++, shell, PowerShell and SQL, so progressive disclosure no longer degrades to full-file reads for those languages.
 - Registered `.bash` and `.zsh` as shell sources.
+- Added `host-uninstall`, completing the shortcut install lifecycle. It only considers the five `reducer-*` names, never scans the target directory, and keeps hand-edited shortcuts unless `--force` is given.
+- Added top-level `update` (`index` / `shortcuts` / `self`) and `remove` (`state` / `shortcuts` / `artifacts` / `all`) for the shortcuts and per-repository state that `npx skills` and `pip` do not track.
+- Made removal dry-run by default and graded `.repo-context/`: provider trust, provider manifests and artifacts are preserved unless `--all` is given, and unrecognized entries are reported rather than deleted.
+- Added `artifact remove` so the artifact store is no longer append-only.
+- `update --target self` reports the `npx skills` / `pip` command to run and never executes a package manager.
 - Bumped the summary cache version and made stale-generation caches be discarded rather than migrated, so a parser change cannot keep serving summaries produced by the previous parser.
 - Replaced the flat "Supported Languages" list in both READMEs with a per-language extraction tier table verified by regression tests.
 - Made `--no-sync` strictly read an existing persistent index and fail when none exists.
@@ -17,7 +22,7 @@
 - Split CLI parsing, repository handlers and context orchestration out of the former CLI god module.
 - Renamed `references/architecture.md` to `references/overview.md` to avoid file/directory naming ambiguity.
 - Reworked both READMEs around two explicit product surfaces: the Core Reducer and the optional advisory Harness Planner.
-- Archived the v1.3 architecture audit and added a v1.4 remediation record under `docs/audits/`.
+- Archived the v1.0 architecture audit and added a v1.4 remediation record under `docs/audits/`.
 
 ## 1.3.0
 

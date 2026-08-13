@@ -437,6 +437,49 @@ Install or inspect the human-facing shortcuts:
 repo-context host-install --host claude-code --scope project --repo .
 repo-context host-install --host codex --scope project --repo .
 repo-context host-status --host claude-code --scope project --repo .
+repo-context host-uninstall --host claude-code --scope project --repo .
+```
+
+`host-uninstall` is a dry run until you pass `--yes`. It only considers the five `reducer-*` names, never scans the target directory, and keeps any shortcut you edited after installation unless you add `--force`.
+
+### `update` / `remove` — what the package manager cannot reach
+
+Package-level installs already have their own lifecycle: `npx skills update|remove` manages the Skill package, and `pip` manages the `repo-context` console command. Neither of them knows about the slash-command files `host-install` writes, or about the `.repo-context/` state this runtime creates inside every repository it scans. That is what these two commands maintain.
+
+```bash
+# Refresh the persistent index and re-render already-installed shortcuts
+repo-context update --repo . --target all --pretty
+
+# Only re-render shortcuts (never installs where nothing was installed)
+repo-context update --repo . --target shortcuts
+
+# Print the package-manager commands for updating the distribution itself
+repo-context update --target self
+```
+
+`--target self` **reports** the command to run and never executes it — this runtime has no third-party dependencies and does not shell out to package managers.
+
+```bash
+# Dry run: show what would be removed
+repo-context remove --repo . --target state --pretty
+
+# Apply it
+repo-context remove --repo . --target state --yes
+```
+
+Removal is **dry run by default**, and `.repo-context/` is graded:
+
+| Class | Contents | Removed by |
+|---|---|---|
+| Regenerable | `index.json`, `cache/`, `sessions/`, `runs/`, `budgets/`, `lifecycle/`, `provider-health.json`, `knowledge.json` | `--target state --yes` |
+| User configuration and data | `config.json` (provider trust), `providers.json`, `providers.d/`, `artifacts/` | only with `--all` |
+
+Anything unrecognized inside `.repo-context/` is reported and preserved rather than deleted. Other targets:
+
+```bash
+repo-context remove --repo . --target shortcuts --yes     # installed /reducer-* files
+repo-context remove --repo . --target artifacts --yes     # stored agent/tool outputs
+repo-context artifact remove <artifact-id> --repo .       # one artifact
 ```
 
 The lower-level commands below remain available for runtime debugging, custom integrations and advanced workflows.

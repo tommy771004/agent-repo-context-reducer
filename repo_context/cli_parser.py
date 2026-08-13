@@ -89,6 +89,40 @@ def build_parser() -> argparse.ArgumentParser:
     hstatus.add_argument("--repo", default=".")
     hstatus.add_argument("--pretty", action="store_true")
 
+    huninstall = sub.add_parser("host-uninstall", help="Remove reducer-* shortcuts installed by host-install")
+    huninstall.add_argument("--host", required=True, choices=["claude-code", "codex"])
+    huninstall.add_argument("--scope", choices=["project", "global"], default="project")
+    huninstall.add_argument("--repo", default=".")
+    huninstall.add_argument("--yes", action="store_true", help="Apply the removal; without this the command is a dry run")
+    huninstall.add_argument("--force", action="store_true", help="Also remove shortcuts that were edited after installation")
+    huninstall.add_argument("--pretty", action="store_true")
+
+    update = sub.add_parser("update", help="Refresh what this runtime owns: persistent index and installed reducer-* shortcuts")
+    update.add_argument("--repo", default=".")
+    update.add_argument("--target", choices=["all", "index", "shortcuts", "self"], default="all")
+    update.add_argument("--host", action="append", choices=["claude-code", "codex"], default=[],
+                        help="Limit shortcut refresh to one host (repeatable); default is every host")
+    update.add_argument("--scope", action="append", choices=["project", "global"], default=[],
+                        help="Shortcut scopes to refresh (repeatable); default is project")
+    update.add_argument("--dry-run", action="store_true")
+    update.add_argument("--max-files", type=int, default=10000)
+    update.add_argument("--max-file-bytes", type=int, default=512_000)
+    update.add_argument("--include-hidden", action="store_true")
+    update.add_argument("--include-generated", action="store_true")
+    update.add_argument("--no-cache", action="store_true")
+    update.add_argument("--pretty", action="store_true")
+
+    remove = sub.add_parser("remove", help="Remove runtime state, installed shortcuts or stored artifacts")
+    remove.add_argument("--repo", default=".")
+    remove.add_argument("--target", choices=["state", "shortcuts", "artifacts", "all"], default="state")
+    remove.add_argument("--host", action="append", choices=["claude-code", "codex"], default=[])
+    remove.add_argument("--scope", action="append", choices=["project", "global"], default=[])
+    remove.add_argument("--yes", action="store_true", help="Apply the removal; without this the command is a dry run")
+    remove.add_argument("--all", dest="include_preserved", action="store_true",
+                        help="Also remove provider trust, provider manifests and artifacts")
+    remove.add_argument("--force", action="store_true", help="Also remove shortcuts that were edited after installation")
+    remove.add_argument("--pretty", action="store_true")
+
     complexity = sub.add_parser("complexity", help="Heuristically classify task complexity before deciding whether multi-agent work is justified")
     complexity.add_argument("task"); complexity.add_argument("--intent", choices=["understand", "debug", "change-impact", "review"]); complexity.add_argument("--pretty", action="store_true")
 
@@ -116,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--repo", default="."); handoff.add_argument("--task", default=""); handoff.add_argument("--store-artifact", action="store_true"); handoff.add_argument("--pretty", action="store_true")
 
     artifact = sub.add_parser("artifact", help="Store large agent/tool outputs outside model context and retrieve compact metadata")
-    artifact.add_argument("action", choices=["put", "get", "list"]); artifact.add_argument("value", nargs="?")
+    artifact.add_argument("action", choices=["put", "get", "list", "remove"]); artifact.add_argument("value", nargs="?")
     artifact.add_argument("--repo", default="."); artifact.add_argument("--kind", default="agent-output"); artifact.add_argument("--producer", default="unknown")
     artifact.add_argument("--payload", action="store_true", help="Include full payload when reading an artifact"); artifact.add_argument("--limit", type=int, default=50); artifact.add_argument("--pretty", action="store_true")
 
