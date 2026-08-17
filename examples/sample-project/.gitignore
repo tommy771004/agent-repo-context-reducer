@@ -1,5 +1,6 @@
+.repo-context/
 node_modules/
-.repo-context-cache/
+dist/
 .env
 # agent-repo-context-reducer runtime state
-.repo-context/
+.repo-context-cache/

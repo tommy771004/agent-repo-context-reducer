@@ -9,7 +9,6 @@ from .storage import load_index, save_index
 
 
 def _public_index(index: dict[str, Any]) -> dict[str, Any]:
-    # by_path is derived and needlessly duplicates every file in persistent JSON.
     out = {k: v for k, v in index.items() if k != "by_path"}
     symbols: list[dict[str, Any]] = []
     for f in out.get("files", []):

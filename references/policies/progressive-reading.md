@@ -1,11 +1,3 @@
-# Policy: Progressive Reading
+# Progressive reading
 
-Expand context in layers:
-
-1. repository map,
-2. task-ranked files,
-3. symbol signatures,
-4. selected symbol bodies,
-5. full source only if still necessary.
-
-After each layer ask: "What unresolved question requires more source?" If there is no concrete unresolved question, stop expanding.
+Start with project map/structure, then read symbols, then full or delta source only when needed. Do not treat a large context window as a reason to preload the repository.

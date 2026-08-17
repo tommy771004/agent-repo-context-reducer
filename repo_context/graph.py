@@ -12,7 +12,6 @@ def _normalize_relative_spec(source: str, spec: str) -> str | None:
     if spec.startswith("./") or spec.startswith("../") or spec.startswith("/"):
         raw = (base / spec).as_posix() if not spec.startswith("/") else spec.lstrip("/")
     elif spec.startswith("."):
-        # Python style: .foo / ..foo.bar
         dots = len(spec) - len(spec.lstrip("."))
         rest = spec[dots:].replace(".", "/")
         parent = base
@@ -44,7 +43,6 @@ def _candidate_paths(source: str, spec: str, known: set[str]) -> list[str]:
         candidates.append(normalized + ext)
     for ext in SOURCE_EXTENSIONS:
         candidates.append(normalized.rstrip("/") + "/index" + ext)
-    # Python package import may target __init__.py.
     candidates.append(normalized.rstrip("/") + "/__init__.py")
     return [c for c in candidates if c in known]
 

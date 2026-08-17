@@ -1,8 +1,3 @@
 [
-  {
-    "task": "payment checkout order",
-    "expected_paths": [
-      "src/services/payment.js"
-    ]
-  }
+  {"task":"payment checkout order","expected_paths":["src/services/payment.js","src/services/order.js"]}
 ]

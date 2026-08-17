@@ -1,6 +1,4 @@
-const { checkout } = require("../services/order");
-async function createOrder(req, res) {
-  const result = await checkout(req.body);
-  res.json(result);
+import { createOrder } from '../services/order.js';
+export function checkout(req) {
+  return createOrder(req.body);
 }
-module.exports = { createOrder };

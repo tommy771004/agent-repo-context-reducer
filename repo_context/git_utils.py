@@ -25,7 +25,6 @@ def git_root(path: pathlib.Path) -> pathlib.Path | None:
 
 
 def tracked_and_unignored_files(root: pathlib.Path) -> list[pathlib.Path] | None:
-    """List files using Git so .gitignore is honored, including for a repo subtree."""
     root = root.resolve()
     gr = git_root(root)
     if gr is None:
@@ -70,7 +69,6 @@ def changed_files(root: pathlib.Path, base: str | None = None) -> list[str]:
     commands: list[list[str]] = []
     if base:
         commands.append(["diff", "--name-only", "-z", f"{base}...HEAD"])
-    # Always include current working-tree, staged, and untracked changes.
     commands.extend([
         ["diff", "--name-only", "-z"],
         ["diff", "--name-only", "--cached", "-z"],

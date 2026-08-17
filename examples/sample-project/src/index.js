@@ -1,5 +1,4 @@
-const express = require("express");
-const { createOrder } = require("./routes/order");
-const app = express();
-app.post("/orders", createOrder);
-module.exports = { app };
+import { createOrder } from './services/order.js';
+export function start() {
+  return createOrder({ amount: 100 });
+}

@@ -1,6 +1,5 @@
-const { charge } = require("./payment");
-async function checkout(input) {
-  const payment = await charge(input.total);
-  return { status: "paid", payment };
+import { charge } from './payment.js';
+export async function createOrder(input) {
+  const paid = await charge(input.amount);
+  return { paid };
 }
-module.exports = { checkout };

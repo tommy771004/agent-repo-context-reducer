@@ -13,15 +13,6 @@ def _fingerprint(text: str) -> str:
 
 
 def canonicalize_external(provider: str, payload: Any) -> list[dict[str, Any]]:
-    """Normalize external provider JSON into context blocks without inventing semantics.
-
-    Accepted shapes:
-      - list[dict]
-      - {"results": list[dict]}
-      - {"files": list[dict]}
-      - {"symbols": list[dict]}
-    Each block may contain path, symbol/name, content/text/summary, score.
-    """
     if isinstance(payload, dict):
         if isinstance(payload.get("results"), list):
             items = payload["results"]
@@ -73,7 +64,6 @@ def load_external_file(path: pathlib.Path, provider: str) -> list[dict[str, Any]
 
 
 def deduplicate_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Exact/canonical identity dedup only; no semantic merge claims."""
     out: list[dict[str, Any]] = []
     seen_fp: set[str] = set()
     seen_identity: set[tuple[str, str]] = set()

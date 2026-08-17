@@ -26,6 +26,9 @@ class Trace:
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
 
+    def reducer_stage(self, stage: str, metrics: dict[str, Any]) -> None:
+        self.event("reducer-stage", {"stage": stage, **metrics})
+
 
 def read_trace(root: pathlib.Path, run_id: str) -> list[dict[str, Any]]:
     path = state_dir(root) / "runs" / f"{run_id}.jsonl"
@@ -43,9 +46,15 @@ def read_trace(root: pathlib.Path, run_id: str) -> list[dict[str, Any]]:
 
 def replay_summary(root: pathlib.Path, run_id: str) -> dict[str, Any]:
     rows = read_trace(root, run_id)
+    reducer_metrics = [
+        row.get("data", {})
+        for row in rows
+        if row.get("kind") == "reducer-stage"
+    ]
     return {
         "run_id": run_id,
         "events": rows,
         "counts": {k: sum(1 for r in rows if r.get("kind") == k) for k in sorted({r.get("kind") for r in rows})},
+        "reducer_metrics": reducer_metrics,
         "note": "Replay is observational by default and does not re-execute tool or write operations.",
     }

@@ -13,12 +13,6 @@ PORTABLE_PROJECT_RUNTIME = "repo-context"
 
 
 def _global_runtime_command(project_root: pathlib.Path) -> str:
-    """Resolve a machine-local runtime for global shortcuts.
-
-    Global shortcuts are intentionally local to one machine, so an absolute
-    interpreter/script path is acceptable as a fallback. Project shortcuts use
-    PORTABLE_PROJECT_RUNTIME instead because they may be committed and shared.
-    """
     exe = shutil.which("repo-context")
     if exe:
         return shlex.quote(exe)
@@ -122,11 +116,6 @@ def _render(spec: FacadeCommand, host: str, runtime: str) -> str:
 
 
 def _is_generated(text: str, spec: FacadeCommand, host: str, root: pathlib.Path) -> bool:
-    """True when the file still matches output this project would produce.
-
-    Both the portable project runtime and the machine-local global runtime are accepted so
-    that shortcuts installed under either scope remain removable.
-    """
     candidates = {PORTABLE_PROJECT_RUNTIME, _global_runtime_command(root)}
     return any(text == _render(spec, host, runtime) for runtime in candidates)
 
@@ -138,12 +127,6 @@ def uninstall_host_commands(
     yes: bool = False,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Remove reducer-* shortcuts this project installed.
-
-    Only the five known facade names are considered; the target directory is never scanned
-    or removed wholesale. Files that no longer match generated output are reported as
-    `modified` and skipped unless `force` is set.
-    """
     root = pathlib.Path(repo).resolve()
     target = _target(host, scope, root)
     planned: list[dict[str, Any]] = []
@@ -176,7 +159,6 @@ def uninstall_host_commands(
                 item["action"] = "failed"
                 item["warning"] = str(exc)
                 continue
-            # Codex skills live in a per-skill directory; drop it when it becomes empty.
             if host == "codex":
                 try:
                     path.parent.rmdir()

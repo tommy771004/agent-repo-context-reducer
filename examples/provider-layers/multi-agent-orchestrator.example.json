@@ -1,6 +1,1 @@
-{
-  "schema": "repo-context-capabilities/v1",
-  "provider": {"name": "external-multi-agent-orchestrator", "type": "plugin"},
-  "provides": ["orchestration.parallel"],
-  "notes": "Discovery template only. Scheduling and context handoff remain separate capabilities."
-}
+{"schema":"repo-context-capabilities/v1","provider":{"name":"multi-agent-orchestrator","type":"external"},"provides":["orchestration.parallel"]}

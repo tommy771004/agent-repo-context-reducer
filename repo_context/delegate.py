@@ -33,7 +33,6 @@ def delegate_capability(root: pathlib.Path | str, capability: str, task: str,
         }
 
     if selected.get("source_type") == "cli":
-        # Known CLI providers are invoked through capability-specific code elsewhere; generic delegate avoids guessing output semantics.
         return {
             "delegated": False, "provider": selected, "resolution": resolution,
             "reason": "known-cli-requires-capability-specific-adapter", "native_fallback_required": False,

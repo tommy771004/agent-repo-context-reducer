@@ -1,13 +1,3 @@
-# Trace and Replay
+# Trace and replay
 
-A context run records observational events under `.repo-context/runs/<run-id>.jsonl`.
-
-Trace should answer:
-
-- what task route was selected
-- what providers were considered/selected
-- how many context blocks were emitted
-- approximate tokens used
-- coverage/stop recommendation
-
-Replay is observational by default. It must not re-execute shell commands, model calls, writes, deployments or other side effects.
+Trace events record routing, context/reducer stages and metrics. Replay is observational and never re-executes tools or writes. v1.5 reducer events can include before/after token estimates, duplicate/agreement/contradiction counts and packet overflow.

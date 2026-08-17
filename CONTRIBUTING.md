@@ -30,4 +30,3 @@ Two machine-readable/readable surfaces have a runtime source of truth:
 - Shortcut behavior is defined in `repo_context/command_facade.py` and rendered by `repo_context/host_adapters.py`. Do not hand-edit the generated Claude/Codex snapshots without updating the renderer; regression tests compare them byte-for-byte.
 
 Project-scope shortcuts must remain portable and must not contain a developer-specific Python or repository absolute path.
-

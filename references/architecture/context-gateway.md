@@ -1,7 +1,3 @@
-# Architecture: Context Gateway
+# Context gateway
 
-The gateway sits before expensive model reasoning:
-
-Repository -> Persistent Index -> Task Router -> Ranker -> Budget -> Session Dedup -> Minimal Context -> Agent
-
-Deterministic layers handle filesystem guards, static imports, definitions, fingerprints, token estimates, and deltas. Heuristic layers handle task relevance, routing, lexical coverage, and expansion-stop recommendations.
+All context entering the reasoning boundary should be normalized, provenance-labeled, deduplicated and budgeted. External provider blocks are ingested through the same gateway rather than appended raw. Fan-in uses the same principle for worker outputs.

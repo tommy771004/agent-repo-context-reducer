@@ -2,20 +2,23 @@
   "schema": "repo-context-capabilities/v1",
   "provider": {
     "name": "agent-repo-context-reducer",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "provides": [
     "code.read-symbol",
     "code.structure",
     "context.artifact",
     "context.budget",
+    "context.contradiction",
     "context.dedup",
     "context.delta",
+    "context.fan-in",
     "context.handoff",
     "context.lane-budget",
     "context.lifecycle",
     "context.provenance",
     "context.session",
+    "context.synthesis-packet",
     "git.changed",
     "git.diff",
     "harness.complexity",
@@ -43,12 +46,15 @@
     "core": [
       "context.artifact",
       "context.budget",
+      "context.contradiction",
       "context.dedup",
       "context.delta",
+      "context.fan-in",
       "context.handoff",
       "context.lifecycle",
       "context.provenance",
-      "context.session"
+      "context.session",
+      "context.synthesis-packet"
     ],
     "fallback": [
       "code.read-symbol",

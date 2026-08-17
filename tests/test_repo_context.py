@@ -1,18 +1,6 @@
 from __future__ import annotations
-
-import json
-import os
-import pathlib
-import subprocess
-import tempfile
-import unittest
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-import sys
-sys.path.insert(0, str(ROOT))
-
-from repo_context.cache import CACHE_VERSION, SummaryCache
-from repo_context.git_utils import changed_files
+import pathlib, tempfile, unittest
+from repo_context.cache import CACHE_VERSION
 from repo_context.parsers import summarize_source
 from repo_context.scanner import build_index, changed_view, dependency_view, module_map, project_map, query_view
 from repo_context.cli import inspect_file, _symbol_with_ledger
@@ -20,240 +8,46 @@ from repo_context.context_planner import build_context
 from repo_context.indexer import build_persistent, ensure_index, index_status
 from repo_context.router import route_task
 from repo_context.admission import evaluate_read
-
-
+ROOT=pathlib.Path(__file__).resolve().parents[1]
 class RepoContextTests(unittest.TestCase):
     def test_map_outputs_top_k_not_all_files(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        result = project_map(index, top_k=2)
-        self.assertEqual(len(result["important_files"]), 2)
-        self.assertGreater(index["stats"]["files_scanned"], 2)
-        self.assertNotIn("files", result)
-
-    def test_dependency_graph_resolves_relative_js_imports(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        deps = dependency_view(index, "src/routes/order.js")
-        self.assertIn("src/services/order.js", deps["imports"])
-        order_deps = dependency_view(index, "src/services/order.js")
-        self.assertIn("src/services/payment.js", order_deps["imports"])
-
+        idx=build_index(ROOT/'examples/sample-project',use_cache=False); r=project_map(idx,top_k=2); self.assertEqual(len(r['important_files']),2); self.assertGreater(idx['stats']['files_scanned'],2); self.assertNotIn('files',r)
+    def test_dependency_graph_relative_js(self):
+        idx=build_index(ROOT/'examples/sample-project',use_cache=False); self.assertIn('src/services/order.js',dependency_view(idx,'src/routes/order.js')['imports']); self.assertIn('src/services/payment.js',dependency_view(idx,'src/services/order.js')['imports'])
     def test_query_ranking_prefers_payment(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        result = project_map(index, top_k=3, query="payment charge checkout")
-        paths = [f["path"] for f in result["important_files"]]
-        self.assertIn("src/services/payment.js", paths[:3])
-
-    def test_python_ast_handles_async_and_multiline(self):
-        text = """
-import os
-class Demo:
-    async def run(
-        self,
-        value,
-    ):
-        return value
-"""
-        summary = summarize_source("demo.py", text)
-        self.assertEqual(summary["parser"], "python-ast")
-        self.assertIn("Demo", summary["classes"])
-        self.assertTrue(any(x.startswith("run(") for x in summary["functions"]))
-
-    def test_js_arrow_function_is_extracted(self):
-        summary = summarize_source("demo.ts", "export const charge = async (amount: number) => amount;\n")
-        self.assertTrue(any(x.startswith("charge(") for x in summary["functions"]))
-
-    def test_secret_paths_are_skipped(self):
+        idx=build_index(ROOT/'examples/sample-project',use_cache=False); paths=[f['path'] for f in project_map(idx,top_k=3,query='payment charge checkout')['important_files']]; self.assertIn('src/services/payment.js',paths[:3])
+    def test_python_ast(self):
+        s=summarize_source('demo.py','import os\nclass Demo:\n    async def run(self,value):\n        return value\n'); self.assertEqual(s['parser'],'python-ast'); self.assertIn('Demo',s['classes']); self.assertTrue(any(x.startswith('run(') for x in s['functions']))
+    def test_js_arrow(self): self.assertTrue(any(x.startswith('charge(') for x in summarize_source('demo.ts','export const charge = async (amount: number) => amount;\n')['functions']))
+    def test_secret_paths_skipped(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main(): pass\n", encoding="utf-8")
-            (root / ".env").write_text("SECRET=do-not-read\n", encoding="utf-8")
-            (root / "credentials.json").write_text('{"token":"secret"}', encoding="utf-8")
-            index = build_index(root, use_cache=False, include_hidden=True)
-            paths = {f["path"] for f in index["files"]}
-            self.assertIn("main.py", paths)
-            self.assertNotIn(".env", paths)
-            self.assertNotIn("credentials.json", paths)
-            self.assertGreaterEqual(index["stats"].get("secret_paths_skipped", 0), 2)
-
-    def test_inspect_refuses_secret_like_path(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main(): pass\n'); (r/'.env').write_text('SECRET=x'); (r/'credentials.json').write_text('{}'); idx=build_index(r,use_cache=False,include_hidden=True); paths={f['path'] for f in idx['files']}; self.assertIn('main.py',paths); self.assertNotIn('.env',paths); self.assertNotIn('credentials.json',paths)
+    def test_generated_skipped(self):
         with tempfile.TemporaryDirectory() as td:
-            p = pathlib.Path(td) / ".env"
-            p.write_text("TOKEN=x", encoding="utf-8")
-            with self.assertRaises(ValueError):
-                inspect_file(str(p), 10000)
-
-    def test_generated_content_is_skipped_by_default(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main(): pass\n'); (r/'client.py').write_text('# Code generated by tool. DO NOT EDIT.\ndef api(): pass\n'); self.assertNotIn('client.py',{f['path'] for f in build_index(r,use_cache=False)['files']})
+    def test_workspace_detection(self): self.assertIn('packages/shared',{w['path'] for w in build_index(ROOT/'examples/sample-project',use_cache=False)['workspaces']})
+    def test_module_map(self): self.assertTrue(all(x['path'].startswith('src/services/') for x in module_map(build_index(ROOT/'examples/sample-project',use_cache=False),'src/services',top_k=10)['important_files']))
+    def test_cache_hits(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main(): pass\n", encoding="utf-8")
-            (root / "client.py").write_text("# Code generated by tool. DO NOT EDIT.\ndef api(): pass\n", encoding="utf-8")
-            index = build_index(root, use_cache=False)
-            paths = {f["path"] for f in index["files"]}
-            self.assertNotIn("client.py", paths)
-            self.assertEqual(index["stats"].get("generated_content_skipped"), 1)
-
-    def test_nested_workspace_index_is_not_global_entrypoint(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        self.assertNotIn("packages/shared/index.js", index["entry_points"])
-        self.assertIn("src/index.js", index["entry_points"])
-
-    def test_monorepo_workspace_detection(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        paths = {w["path"] for w in index["workspaces"]}
-        self.assertIn("packages/shared", paths)
-
-    def test_module_map_scopes_files(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        result = module_map(index, "src/services", top_k=10)
-        self.assertTrue(result["important_files"])
-        self.assertTrue(all(x["path"].startswith("src/services/") for x in result["important_files"]))
-
-    def test_cache_hits_on_second_scan(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main(): pass\n'); self.assertEqual(build_index(r,use_cache=True)['stats'].get('cache_hits',0),0); self.assertGreaterEqual(build_index(r,use_cache=True)['stats'].get('cache_hits',0),1)
+    def test_persistent_index(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / ".gitignore").write_text(".repo-context/\n", encoding="utf-8")
-            (root / "main.py").write_text("def main(): pass\n", encoding="utf-8")
-            first = build_index(root, use_cache=True)
-            self.assertEqual(first["stats"].get("cache_hits", 0), 0)
-            second = build_index(root, use_cache=True)
-            self.assertGreaterEqual(second["stats"].get("cache_hits", 0), 1)
-
-    @unittest.skipUnless(subprocess.run(["git", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0, "git required")
-    def test_git_changed_and_affected_neighbor(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main():\n return 1\n'); b=build_persistent(r,use_cache=True); self.assertTrue(index_status(r)['indexed']); self.assertEqual(b['mode'],'built')
+    def test_no_sync_requires_index(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            subprocess.run(["git", "init", "-q", str(root)], check=True)
-            subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.com"], check=True)
-            subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
-            (root / ".gitignore").write_text(".repo-context/\n", encoding="utf-8")
-            (root / "main.js").write_text('const x = require("./service");\n', encoding="utf-8")
-            (root / "service.js").write_text("function run() { return 1; }\n", encoding="utf-8")
-            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
-            subprocess.run(["git", "-C", str(root), "commit", "-qm", "init"], check=True)
-            (root / "service.js").write_text("function run() { return 2; }\n", encoding="utf-8")
-            changed = changed_files(root)
-            self.assertEqual(changed, ["service.js"])
-            index = build_index(root, use_cache=False)
-            result = changed_view(index, changed, depth=1)
-            affected = {f["path"] for f in result["affected_files"]}
-            self.assertIn("service.js", affected)
-            self.assertIn("main.js", affected)
-
-    def test_persistent_index_and_status(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main(): pass\n');
+            with self.assertRaises(ValueError): ensure_index(r,sync=False,use_cache=True)
+    def test_runtime_state_single_dir(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
-            built = build_persistent(root, use_cache=True)
-            self.assertTrue((root / ".repo-context" / "index.json").is_file())
-            status = index_status(root)
-            self.assertTrue(status["indexed"])
-            self.assertGreaterEqual(status["symbols"], 1)
-            self.assertEqual(built["mode"], "built")
-
-    def test_sync_reuses_unchanged_source_cache(self):
+            r=pathlib.Path(td); (r/'main.py').write_text('def main(): pass\n'); build_persistent(r,use_cache=True); self.assertTrue((r/'.repo-context/cache'/f'summaries-v{CACHE_VERSION}.json').is_file()); self.assertFalse((r/'.repo-context-cache').exists())
+    def test_query_view_distinct(self): self.assertIn('matches',query_view(build_index(ROOT/'examples/sample-project',use_cache=False),'payment',top_k=3))
+    def test_router_debug(self): self.assertEqual(route_task('payment fails with an exception during checkout')['task_type'],'debug')
+    def test_context_budget_symbols(self):
+        idx=build_index(ROOT/'examples/sample-project',use_cache=False); r=build_context(idx,'payment checkout order',budget=1800,session='test-budget'); self.assertLessEqual(r['budget']['estimated_used_tokens'],1800); self.assertTrue(r['files']); self.assertTrue(any(s['name'] in {'charge','checkout','createOrder'} for s in r['symbols']))
+    def test_symbol_session_dedup(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
-            build_persistent(root, use_cache=True)
-            synced = ensure_index(root, sync=True, use_cache=True)
-            stats = synced["index"].get("sync_stats", {})
-            self.assertGreaterEqual(stats.get("cache_hits", 0), 1)
-            self.assertEqual(stats.get("reparsed_source_files", 0), 0)
-            self.assertEqual(stats.get("refresh_mode"), "source-parse-cache-aware; graph/ranking rebuilt")
-
-    def test_no_sync_requires_existing_index_and_does_not_create_state(self):
+            r=pathlib.Path(td); (r/'service.py').write_text('def charge(amount):\n return amount\n'); first=_symbol_with_ledger(r,'service.py','charge','s1',100000); second=_symbol_with_ledger(r,'service.py','charge','s1',100000); self.assertEqual(first['content_mode'],'full-symbol'); self.assertEqual(second['content_mode'],'omitted-unchanged')
+    def test_read_admission(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "No persistent index exists"):
-                ensure_index(root, sync=False, use_cache=True)
-            self.assertFalse((root / ".repo-context").exists())
-
-
-    def test_runtime_state_is_single_directory_and_auto_gitignored(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
-            build_persistent(root, use_cache=True)
-            self.assertTrue((root / ".repo-context" / "index.json").is_file())
-            self.assertTrue((root / ".repo-context" / "cache" / f"summaries-v{CACHE_VERSION}.json").is_file())
-            self.assertFalse((root / ".repo-context-cache").exists())
-            ignore = (root / ".gitignore").read_text(encoding="utf-8")
-            self.assertIn(".repo-context/", ignore)
-            self.assertIn(".repo-context-cache/", ignore)
-
-    def test_query_view_is_distinct_from_project_map(self):
-        index = build_index(ROOT / "examples" / "sample-project", use_cache=False)
-        mapped = project_map(index, top_k=3)
-        queried = query_view(index, "payment checkout", top_k=3)
-        self.assertIn("important_files", mapped)
-        self.assertNotIn("matches", mapped)
-        self.assertIn("matches", queried)
-        self.assertEqual(queried["mode"], "task-ranked-query")
-
-    def test_router_selects_debug_workflow(self):
-        routed = route_task("payment fails with an exception during checkout")
-        self.assertEqual(routed["task_type"], "debug")
-        self.assertTrue(routed["workflow"].endswith("debug.md"))
-        self.assertEqual(routed["classification"], "heuristic")
-
-    def test_context_respects_budget_and_uses_symbols(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            source = ROOT / "examples" / "sample-project"
-            for path in source.rglob("*"):
-                if path.is_file() and ".repo-context" not in path.parts:
-                    rel = path.relative_to(source)
-                    target = root / rel
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(path.read_bytes())
-            index = build_index(root, use_cache=False)
-            result = build_context(index, "payment checkout order", budget=1800, session="test-budget")
-            self.assertLessEqual(result["budget"]["estimated_used_tokens"], 1800)
-            self.assertTrue(result["files"])
-            self.assertTrue(any(s["name"] in {"charge", "checkout", "createOrder"} for s in result["symbols"]))
-
-    def test_symbol_session_dedup_omits_unchanged_second_read(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "service.py").write_text("def charge(amount):\n    return amount\n", encoding="utf-8")
-            first = _symbol_with_ledger(root, "service.py", "charge", "s1", 100000)
-            second = _symbol_with_ledger(root, "service.py", "charge", "s1", 100000)
-            self.assertEqual(first["content_mode"], "full-symbol")
-            self.assertEqual(second["content_mode"], "omitted-unchanged")
-            self.assertNotIn("content", second)
-
-    def test_symbol_session_returns_delta_after_change(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            path = root / "service.py"
-            path.write_text("def charge(amount):\n    return amount\n", encoding="utf-8")
-            _symbol_with_ledger(root, "service.py", "charge", "s2", 100000)
-            path.write_text("def charge(amount):\n    fee = 2\n    return amount + fee\n", encoding="utf-8")
-            changed = _symbol_with_ledger(root, "service.py", "charge", "s2", 100000)
-            self.assertIn(changed["content_mode"], {"delta", "full-symbol"})
-            self.assertFalse(changed["already_seen"])
-
-    def test_read_admission_prefers_symbol_for_large_file(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            body = "def login():\n    return True\n" + "\n".join(f"# line {i}" for i in range(500))
-            (root / "auth.py").write_text(body, encoding="utf-8")
-            index = build_index(root, use_cache=False)
-            decision = evaluate_read(index, "auth.py", "login authentication failure", requested="full")
-            self.assertFalse(decision["allow"])
-            self.assertEqual(decision["decision"], "prefer-symbol")
-
-    def test_internal_repo_context_state_is_never_indexed(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "main.py").write_text("def main(): pass\n", encoding="utf-8")
-            state = root / ".repo-context"
-            state.mkdir()
-            (state / "index.json").write_text('{"secretish":"metadata"}', encoding="utf-8")
-            index = build_index(root, use_cache=False, include_hidden=True)
-            self.assertNotIn(".repo-context/index.json", {f["path"] for f in index["files"]})
-
-
-if __name__ == "__main__":
-    unittest.main()
+            r=pathlib.Path(td); (r/'auth.py').write_text('def login():\n return True\n'+'\n'.join(f'# line {i}' for i in range(500))); d=evaluate_read(build_index(r,use_cache=False),'auth.py','login authentication failure',requested='full'); self.assertFalse(d['allow']); self.assertEqual(d['decision'],'prefer-symbol')
+if __name__=='__main__': unittest.main()

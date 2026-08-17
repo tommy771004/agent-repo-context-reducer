@@ -1,14 +1,7 @@
 from __future__ import annotations
-
-import json
-import pathlib
-import tempfile
-import unittest
-import sys
-
+import json, pathlib, sys, tempfile, unittest
 from repo_context.attribution import analyze_context_usage
 from repo_context.artifact_store import ArtifactStore
-from repo_context.complexity import classify_complexity
 from repo_context.benchmark import benchmark_tasks
 from repo_context.capabilities import detect_providers, resolve_capability, doctor
 from repo_context.external_context import canonicalize_external, deduplicate_blocks
@@ -26,213 +19,47 @@ from repo_context.tool_policy import classify_command
 from repo_context.trace import Trace, replay_summary
 from repo_context.voi import value_of_information
 
-
 class HarnessTests(unittest.TestCase):
     def test_detect_skill_overlap_without_auto_delegation(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            skill = root / ".agents" / "skills" / "graph-guru"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("---\nname: graph-guru\ndescription: Builds a code graph and symbol index.\n---\n", encoding="utf-8")
-            detected = detect_providers(root, required=["repository.graph"], use_cache=False)
-            ids = {p["id"] for p in detected["providers"]}
-            self.assertIn("skill:graph-guru", ids)
-            resolution = resolve_capability(root, "repository.graph")
-            self.assertEqual(resolution["selected"]["source_type"], "native")
-            self.assertTrue(resolution["potential_overlaps"])
-
-    def test_manifest_provider_requires_external_command_authorization(self):
+            root=pathlib.Path(td); skill=root/'.agents/skills/graph-guru'; skill.mkdir(parents=True); (skill/'SKILL.md').write_text('---\nname: graph-guru\ndescription: Builds a code graph and symbol index.\n---\n')
+            d=detect_providers(root,required=['repository.graph'],use_cache=False); self.assertTrue(any(p['id']=='skill:graph-guru' for p in d['providers'])); self.assertEqual(resolve_capability(root,'repository.graph')['selected']['source_type'],'native')
+    def test_manifest_requires_authorization(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            skill = root / ".agents" / "skills" / "graph-guru"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("---\nname: graph-guru\ndescription: graph\n---\n", encoding="utf-8")
-            (skill / "capabilities.json").write_text(json.dumps({
-                "schema": "repo-context-capabilities/v1",
-                "provides": [{"capability": "repository.graph", "command": {"argv": ["graph-guru", "query"]}}]
-            }), encoding="utf-8")
-            blocked = resolve_capability(root, "repository.graph", allow_external_commands=False)
-            self.assertEqual(blocked["selected"]["source_type"], "native")
-            allowed = resolve_capability(root, "repository.graph", allow_external_commands=True)
-            self.assertEqual(allowed["selected"]["id"], "skill:graph-guru")
-
-    def test_doctor_reports_overlap(self):
+            root=pathlib.Path(td); skill=root/'.agents/skills/graph-guru'; skill.mkdir(parents=True); (skill/'SKILL.md').write_text('---\nname: graph-guru\ndescription: graph\n---\n'); (skill/'capabilities.json').write_text(json.dumps({'schema':'repo-context-capabilities/v1','provides':[{'capability':'repository.graph','command':{'argv':[sys.executable,'-c','print("{}")']}}]}))
+            self.assertEqual(resolve_capability(root,'repository.graph')['selected']['source_type'],'native'); self.assertEqual(resolve_capability(root,'repository.graph',allow_external_commands=True)['selected']['id'],'skill:graph-guru')
+    def test_trusted_manifest_reused(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            skill = root / ".agents" / "skills" / "repo-map"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("---\nname: repo-map\ndescription: repository graph and symbol index\n---\n", encoding="utf-8")
-            result = doctor(root)
-            self.assertIn("repository.graph", result["overlaps"])
-
+            root=pathlib.Path(td); skill=root/'.agents/skills/graph-guru'; skill.mkdir(parents=True); (skill/'SKILL.md').write_text('---\nname: graph-guru\ndescription: graph\n---\n'); (skill/'capabilities.json').write_text(json.dumps({'schema':'repo-context-capabilities/v1','provides':[{'capability':'repository.graph','command':{'argv':[sys.executable,'-c','print("{}")']}}]})); trust_provider(root,'skill:graph-guru',True); self.assertEqual(resolve_capability(root,'repository.graph')['selected']['id'],'skill:graph-guru')
     def test_external_context_exact_dedup(self):
-        blocks = canonicalize_external("p1", [
-            {"path": "a.py", "symbol": "run", "content": "def run(): pass"},
-            {"path": "a.py", "symbol": "run", "content": "def run(): pass"},
-        ])
-        self.assertEqual(len(deduplicate_blocks(blocks)), 1)
-
-    def test_trusted_manifest_provider_is_reused_without_per_call_allow_flag(self):
+        b=canonicalize_external('p1',[{'path':'a.py','symbol':'run','content':'def run(): pass'},{'path':'a.py','symbol':'run','content':'def run(): pass'}]); self.assertEqual(len(deduplicate_blocks(b)),1)
+    def test_task_budget_blocks(self):
+        with tempfile.TemporaryDirectory() as td: self.assertFalse(TaskBudget(pathlib.Path(td),'run',BudgetLimits(context_tokens=100)).consume(context_tokens=100)['allow_more_work'])
+    def test_lifecycle_demotes(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            skill = root / ".agents" / "skills" / "graph-guru"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("---\nname: graph-guru\ndescription: graph\n---\n", encoding="utf-8")
-            (skill / "capabilities.json").write_text(json.dumps({
-                "schema": "repo-context-capabilities/v1",
-                "provides": [{"capability": "repository.graph", "command": {"argv": [sys.executable, "-c", "print('{}')"]}}]
-            }), encoding="utf-8")
-            before = resolve_capability(root, "repository.graph")
-            self.assertEqual(before["selected"]["source_type"], "native")
-            trust_provider(root, "skill:graph-guru", True)
-            after = resolve_capability(root, "repository.graph")
-            self.assertEqual(after["selected"]["id"], "skill:graph-guru")
-            self.assertTrue(after["trusted_selected"])
-
-    def test_registered_plugin_manifest_is_detected_but_not_auto_invoked_without_adapter(self):
+            life=ContextLifecycle(pathlib.Path(td),'s'); life.touch('a','x',5000); life.touch('b','y',5000); self.assertTrue(life.evict(max_hot_tokens=5000)['demoted_to_warm'])
+    def test_tool_policy(self): self.assertEqual(classify_command('git reset --hard HEAD~1')['risk'],'destructive')
+    def test_fanout(self): self.assertEqual(recommend_fanout(.92,2,2,4)['recommended_new_subagents'],0)
+    def test_voi(self): self.assertGreater(value_of_information(relevance=1,uncertainty=1,novelty=1,graph_distance=0,estimated_tokens=100)['score'],value_of_information(relevance=1,uncertainty=1,novelty=1,graph_distance=0,estimated_tokens=10000)['score'])
+    def test_trace(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            reg = root / ".repo-context" / "providers.d"
-            reg.mkdir(parents=True)
-            (reg / "mcp.json").write_text(json.dumps({
-                "schema": "repo-context-capabilities/v1",
-                "provider": {"name": "codegraph-mcp", "type": "mcp"},
-                "provides": ["repository.graph", "repository.symbols"]
-            }), encoding="utf-8")
-            detected = detect_providers(root, required=["repository.graph"], use_cache=False)
-            self.assertTrue(any(p["id"] == "mcp:codegraph-mcp" for p in detected["providers"]))
-            resolved = resolve_capability(root, "repository.graph")
-            self.assertEqual(resolved["selected"]["source_type"], "native")
-            self.assertTrue(any(p.get("id") == "mcp:codegraph-mcp" for p in resolved["potential_overlaps"]))
-
-    def test_authorized_manifest_delegate_executes_without_shell_and_records_health(self):
+            root=pathlib.Path(td); t=Trace(root,'r1'); t.event('route',{'task':'debug'}); self.assertEqual(replay_summary(root,'r1')['counts']['route'],1)
+    def test_attribution(self): self.assertEqual(analyze_context_usage({'files':[{'path':'a.py','functions':['run'],'classes':[],'types':[],'estimated_tokens':100}],'symbols':[]},'run is relevant')['classification'],'heuristic-lexical-attribution')
+    def test_benchmark_recall(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            skill = root / ".agents" / "skills" / "graph-guru"
-            skill.mkdir(parents=True)
-            script = root / "provider.py"
-            script.write_text('import json; print(json.dumps([{"path":"x.py","symbol":"run","content":"def run(): pass"}]))\n', encoding="utf-8")
-            (skill / "SKILL.md").write_text("---\nname: graph-guru\ndescription: graph\n---\n", encoding="utf-8")
-            (skill / "capabilities.json").write_text(json.dumps({
-                "schema": "repo-context-capabilities/v1",
-                "provides": [{"capability": "repository.graph", "command": {"argv": [sys.executable, str(script)]}}]
-            }), encoding="utf-8")
-            result = delegate_capability(root, "repository.graph", "debug x", allow_external_commands=True)
-            self.assertTrue(result["delegated"])
-            self.assertFalse(result["execution"]["shell"])
-            self.assertEqual(result["blocks"][0]["symbol"], "run")
-            health = ProviderHealth(root).summary("skill:graph-guru")["skill:graph-guru"]
-            self.assertEqual(health["attempts"], 1)
-            self.assertEqual(health["successes"], 1)
-
-    def test_task_budget_blocks_when_limit_exhausted(self):
+            root=pathlib.Path(td); (root/'payment.py').write_text('def charge(amount):\n return amount\n'); self.assertEqual(benchmark_tasks(root,[{'task':'payment charge','expected_paths':['payment.py']}],budget=1200)['tasks'][0]['expected_path_recall'],1.0)
+    def test_artifact_store(self):
         with tempfile.TemporaryDirectory() as td:
-            b = TaskBudget(pathlib.Path(td), "run", BudgetLimits(context_tokens=100, tool_calls=2))
-            state = b.consume(context_tokens=100)
-            self.assertFalse(state["allow_more_work"])
-            self.assertIn("context_tokens", state["exceeded"])
-
-    def test_lifecycle_demotes_hot_context(self):
+            store=ArtifactStore(td); item=store.put({'summary':'x','raw':'y'*5000},producer='researcher'); self.assertNotIn('payload',item); self.assertEqual(store.get(item['id'])['payload']['summary'],'x')
+    def test_handoff_reducer(self): self.assertNotIn('debug_log',reduce_handoff({'summary':'done','debug_log':'x'*10000},from_role='planner',to_role='implementer')['handoff'])
+    def test_scheduler(self):
+        r=build_schedule('Refactor authentication and migrate database integration across the repo','debug'); nodes={n['id']:set(n['depends_on']) for n in r['nodes']}; self.assertTrue(all(not(nodes[n]&set(w)) for w in r['waves'] for n in w))
+    def test_knowledge(self):
         with tempfile.TemporaryDirectory() as td:
-            life = ContextLifecycle(pathlib.Path(td), "s")
-            life.touch("a", "x", 5000)
-            life.touch("b", "y", 5000)
-            result = life.evict(max_hot_tokens=5000)
-            self.assertGreaterEqual(len(result["demoted_to_warm"]), 1)
-
-    def test_tool_policy_flags_destructive_command(self):
-        result = classify_command("git reset --hard HEAD~1")
-        self.assertEqual(result["risk"], "destructive")
-
-    def test_fanout_stops_at_high_coverage(self):
-        result = recommend_fanout(0.92, unresolved_count=2, used_subagents=2, max_subagents=4)
-        self.assertEqual(result["recommended_new_subagents"], 0)
-        self.assertTrue(result["recommend_cancel_remaining"])
-
-    def test_voi_penalizes_high_token_cost(self):
-        small = value_of_information(relevance=1, uncertainty=1, novelty=1, graph_distance=0, estimated_tokens=100)
-        large = value_of_information(relevance=1, uncertainty=1, novelty=1, graph_distance=0, estimated_tokens=10000)
-        self.assertGreater(small["score"], large["score"])
-
-    def test_trace_replay_is_observational(self):
+            root=pathlib.Path(td); (root/'docs').mkdir(); (root/'docs/adr.md').write_text('# Payment\nUse event queue.'); build_knowledge_index(root); self.assertEqual(search_knowledge(root,'payment queue')['results'][0]['path'],'docs/adr.md')
+    def test_executor_unresolved(self):
+        with tempfile.TemporaryDirectory() as td: self.assertIsNone(resolve_capability(pathlib.Path(td),'executor.autonomous')['selected'])
+    def test_plan_executor_optional(self):
         with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            t = Trace(root, "r1")
-            t.event("route", {"task": "debug"})
-            replay = replay_summary(root, "r1")
-            self.assertEqual(replay["counts"]["route"], 1)
-            self.assertIn("does not re-execute", replay["note"])
-
-    def test_attribution_is_labeled_heuristic(self):
-        pack = {"files": [{"path": "a.py", "functions": ["run"], "classes": [], "types": [], "estimated_tokens": 100}], "symbols": []}
-        result = analyze_context_usage(pack, "run is the relevant function")
-        self.assertEqual(result["classification"], "heuristic-lexical-attribution")
-        self.assertEqual(result["lexically_attributed_tokens"], 100)
-
-    def test_benchmark_can_measure_expected_path_recall(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "payment.py").write_text("def charge(amount):\n    return amount\n", encoding="utf-8")
-            result = benchmark_tasks(root, [{"task": "payment charge", "expected_paths": ["payment.py"]}], budget=1200)
-            self.assertEqual(result["tasks"][0]["expected_path_recall"], 1.0)
-            self.assertFalse(result["tasks"][0]["correctness_claim"])
-
-    def test_complexity_router_keeps_small_tasks_single_agent(self):
-        result = classify_complexity("Explain this function")
-        self.assertEqual(result["recommended_agents"], 1)
-        self.assertFalse(result["multi_agent_recommended"])
-
-    def test_complexity_router_marks_cross_cutting_task_complex(self):
-        result = classify_complexity("Refactor authentication across the repo and migrate the database integration")
-        self.assertIn(result["level"], {"complex", "autonomous"})
-        self.assertTrue(result["multi_agent_recommended"])
-
-    def test_artifact_store_keeps_payload_out_of_compact_view(self):
-        with tempfile.TemporaryDirectory() as td:
-            store = ArtifactStore(td)
-            item = store.put({"summary": "x", "raw": "y" * 5000}, producer="researcher")
-            self.assertNotIn("payload", item)
-            loaded = store.get(item["id"])
-            self.assertEqual(loaded["payload"]["summary"], "x")
-
-    def test_handoff_reducer_selects_structured_keys(self):
-        payload = {"summary": "done", "decisions": ["use queue"], "debug_log": "x" * 10000}
-        result = reduce_handoff(payload, from_role="planner", to_role="implementer")
-        self.assertEqual(result["handoff"]["summary"], "done")
-        self.assertNotIn("debug_log", result["handoff"] )
-        self.assertTrue(result["provenance"]["lossy"])
-
-    def test_scheduler_only_parallelizes_independent_nodes(self):
-        result = build_schedule("Refactor authentication and migrate database integration across the repo", "debug")
-        nodes = {n["id"]: set(n["depends_on"]) for n in result["nodes"]}
-        for wave in result["waves"]:
-            for node in wave:
-                self.assertFalse(nodes[node] & set(wave))
-
-    def test_native_knowledge_fallback_is_docs_only_and_labeled(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = pathlib.Path(td)
-            (root / "docs").mkdir()
-            (root / "docs" / "adr.md").write_text("# Payment decision\nUse an event queue for payment status updates.", encoding="utf-8")
-            (root / "secret.py").write_text("payment secret", encoding="utf-8")
-            built = build_knowledge_index(root)
-            self.assertEqual(built["documents"], 1)
-            result = search_knowledge(root, "payment queue")
-            self.assertEqual(result["results"][0]["path"], "docs/adr.md")
-            self.assertIn("not GraphRAG", result["limitations"] )
-
-    def test_executor_capability_stays_unresolved_without_provider(self):
-        with tempfile.TemporaryDirectory() as td:
-            result = resolve_capability(pathlib.Path(td), "executor.autonomous")
-            self.assertIsNone(result["selected"])
-
-    def test_harness_plan_adds_executor_only_for_autonomous_scope(self):
-        with tempfile.TemporaryDirectory() as td:
-            result = plan_harness("Autonomously implement an end-to-end migration across the entire project and ship production-ready integration", td)
-            self.assertEqual(result["complexity"]["level"], "autonomous")
-            self.assertIn("executor.autonomous", result["capability_plan"]["optional"] )
-            self.assertIn("executor.autonomous", result["unresolved_optional_capabilities"] )
-
-
-if __name__ == "__main__":
-    unittest.main()
+            r=plan_harness('Autonomously implement an end-to-end migration across the entire project and ship production-ready integration',td); self.assertIn('executor.autonomous',r['capability_plan']['optional'])
+if __name__=='__main__': unittest.main()

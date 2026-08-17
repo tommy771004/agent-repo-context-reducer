@@ -6,7 +6,6 @@ from .handoff import reduce_handoff
 from .risk import classify_risk
 
 
-
 def grade_policy(risk_level: str) -> dict[str, Any]:
     threshold = {"low": 0.75, "medium": 0.82, "high": 0.9, "critical": 0.95}.get(risk_level, 0.82)
     criteria = ["task-requirements", "evidence", "tests-or-verification", "regression-risk"]

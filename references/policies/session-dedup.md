@@ -1,7 +1,3 @@
-# Policy: Session Deduplication
+# Session dedup
 
-Use a stable `--session` identifier throughout one coding/reasoning session.
-
-The gateway fingerprints returned symbol bodies. If unchanged content was already returned in the session, it is omitted. If a previously returned symbol changed, the gateway prefers a unified delta when smaller than the full symbol.
-
-Do not change session IDs simply to force unchanged context to be emitted again.
+Track symbol fingerprints across a session. If unchanged, emit a compact reference. If changed, prefer a delta when smaller than the complete symbol. Session state is local runtime metadata.

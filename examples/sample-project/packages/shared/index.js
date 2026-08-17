@@ -1,2 +1,3 @@
-function normalizeMoney(value) { return Number(value).toFixed(2); }
-module.exports = { normalizeMoney };
+export function formatCurrency(value) {
+  return `$${value}`;
+}

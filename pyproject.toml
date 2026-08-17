@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-repo-context-reducer"
-version = "1.4.0"
-description = "Provider-aware repository context reducer with optional advisory harness planning for AI coding agents"
+version = "1.5.0"
+description = "Provider-aware repository context reducer with deterministic multi-agent fan-in for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "tommy771004"}]
-keywords = ["ai", "agent", "harness", "context", "token", "repository", "coding-agent", "claude-code", "codex"]
+keywords = ["ai", "agent", "harness", "context", "token", "repository", "coding-agent", "fan-in", "claude-code", "codex"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
@@ -24,6 +24,7 @@ dependencies = []
 
 [project.scripts]
 repo-context = "repo_context.cli:main"
+repo-context-fan-in = "repo_context.fan_in_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["repo_context*"]

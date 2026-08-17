@@ -1,0 +1,56 @@
+[
+  {
+    "worker": "repo-reader-a",
+    "findings": [
+      {
+        "claim": "Payment status updates asynchronously",
+        "evidence": "src/services/payment.py:42 emits an event",
+        "source": "src/services/payment.py",
+        "confidence": 0.94,
+        "canonicalKey": "payment|status-update-mode",
+        "subject": "payment-status",
+        "predicate": "update-mode",
+        "period": "current",
+        "value": 1,
+        "unit": "mode",
+        "polarity": "async"
+      }
+    ]
+  },
+  {
+    "worker": "repo-reader-b",
+    "findings": [
+      {
+        "claim": "Order state is updated after a payment event",
+        "evidence": "src/routes/order.js subscribes to payment completion",
+        "source": "src/routes/order.js",
+        "confidence": 0.88,
+        "canonicalKey": "payment|status-update-mode",
+        "subject": "payment-status",
+        "predicate": "update-mode",
+        "period": "current",
+        "value": 1,
+        "unit": "mode",
+        "polarity": "async"
+      }
+    ]
+  },
+  {
+    "worker": "reviewer",
+    "findings": [
+      {
+        "claim": "Legacy path still updates payment synchronously",
+        "evidence": "legacy/payment_sync.py:18 writes status directly",
+        "source": "legacy/payment_sync.py",
+        "confidence": 0.73,
+        "canonicalKey": "payment|status-update-mode",
+        "subject": "payment-status",
+        "predicate": "update-mode",
+        "period": "current",
+        "value": 2,
+        "unit": "mode",
+        "polarity": "sync"
+      }
+    ]
+  }
+]

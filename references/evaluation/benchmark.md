@@ -1,17 +1,3 @@
-# Evaluation Policy
+# Benchmark policy
 
-Do not optimize token reduction in isolation.
-
-Track where possible:
-
-- selected context tokens
-- raw repository token estimate
-- files/symbols selected
-- expected-path recall for benchmark fixtures
-- tool-call count
-- latency
-- answer correctness from an independent evaluator
-
-Expected-path recall is not answer correctness. A system that reads nothing can save 100% of tokens and still be useless.
-
-The target metric is closer to **correctness per token** than token reduction alone.
+Measure raw repository tokens, selected context tokens, reduction ratio and optional expected-path recall. For fan-in, also measure raw worker tokens, reduced tokens, synthesis packet tokens, malformed/duplicate/agreement/contradiction counts and reducer latency. Path recall is not final-answer correctness.

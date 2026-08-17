@@ -1,7 +1,3 @@
-# Artifact Store
+# Artifact store
 
-Large agent and tool outputs should persist outside model context under `.repo-context/artifacts/`.
-
-The model should receive compact artifact metadata or a reduced handoff first. Rehydrate the raw payload only when it has clear expected information value.
-
-Artifacts include a SHA-256 fingerprint, byte size, approximate token size, producer, kind, metadata and payload. `.repo-context/` remains ignored by the repository scanner.
+Large agent/tool payloads belong in `.repo-context/artifacts/`. Downstream agents should receive compact metadata or a reduced handoff, not the entire stored payload by default.

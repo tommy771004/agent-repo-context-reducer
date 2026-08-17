@@ -1,10 +1,3 @@
-# Context Lifecycle
+# Context lifecycle
 
-Context lifecycle is harness metadata:
-
-- HOT: currently active context
-- WARM: recently useful summary/reference
-- COLD: historical reference; rehydrate only when needed
-- INVALID: source fingerprint changed
-
-The CLI can demote items between tiers and avoid re-emitting unchanged content. It cannot remove tokens that are already inside an LLM request or provider-managed conversation history.
+Session state tracks hot/warm/cold metadata and symbol fingerprints. Unchanged symbols may be emitted as references; changed symbols may use deltas. Lifecycle metadata does not claim to evict tokens already sent to a model.

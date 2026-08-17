@@ -1,4 +1,3 @@
-async function charge(amount) {
-  return { id: "pay_demo", amount };
+export async function charge(amount) {
+  return { ok: true, amount };
 }
-module.exports = { charge };

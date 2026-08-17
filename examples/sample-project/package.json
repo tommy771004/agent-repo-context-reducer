@@ -1,8 +1,1 @@
-{
-  "name": "sample-checkout",
-  "private": true,
-  "workspaces": ["packages/*"],
-  "dependencies": {
-    "express": "latest"
-  }
-}
+{"name":"sample-project","private":true,"workspaces":["packages/*"],"dependencies":{"express":"^5.0.0"}}

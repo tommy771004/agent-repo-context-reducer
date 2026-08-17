@@ -1,6 +1,1 @@
-{
-  "schema": "repo-context-capabilities/v1",
-  "provider": {"name": "external-code-executor", "type": "plugin"},
-  "provides": ["executor.code"],
-  "notes": "Discovery template only. The reducer does not assume a Kimi, Codex, Claude, or other executor command shape."
-}
+{"schema":"repo-context-capabilities/v1","provider":{"name":"code-executor","type":"external"},"provides":["executor.code"]}

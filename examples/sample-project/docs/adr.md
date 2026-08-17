@@ -1,2 +1,2 @@
-# ADR
-Use event queue for payment status.
+# Payment status updates
+Use an event-driven queue for payment status updates.

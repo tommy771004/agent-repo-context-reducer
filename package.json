@@ -1,17 +1,17 @@
 {
   "name": "agent-repo-context-reducer-skill",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
-  "description": "Provider-aware repository context reducer with optional advisory harness planning.",
+  "description": "Provider-aware repository context reducer with deterministic multi-agent fan-in.",
   "scripts": {
     "test": "python3 -m unittest discover -s tests -v",
     "demo": "python3 scripts/repo_context.py context examples/sample-project \"payment checkout order\" --budget 1800 --pretty",
+    "fan-in": "python3 -m repo_context.fan_in_cli examples/fan-in/worker-outputs.json --pretty",
     "doctor": "python3 scripts/repo_context.py doctor examples/sample-project --pretty",
     "commands": "python3 scripts/repo_context.py commands --pretty",
     "host:claude": "python3 scripts/repo_context.py host-install --host claude-code --scope project --repo . --pretty",
     "host:codex": "python3 scripts/repo_context.py host-install --host codex --scope project --repo . --pretty",
     "plan": "python3 scripts/repo_context.py plan \"Refactor authentication across the repo\" --repo . --pretty",
-    "knowledge": "python3 scripts/repo_context.py knowledge status --repo . --pretty",
     "manifest": "python3 scripts/generate_capabilities.py"
   }
 }

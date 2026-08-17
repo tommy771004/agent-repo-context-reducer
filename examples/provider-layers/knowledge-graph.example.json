@@ -1,6 +1,1 @@
-{
-  "schema": "repo-context-capabilities/v1",
-  "provider": {"name": "external-knowledge-graph", "type": "mcp"},
-  "provides": ["knowledge.search", "knowledge.graph"],
-  "notes": "Discovery template only. Add a real machine adapter/command before trusting or delegating."
-}
+{"schema":"repo-context-capabilities/v1","provider":{"name":"knowledge-graph","type":"external"},"provides":["knowledge.graph"]}

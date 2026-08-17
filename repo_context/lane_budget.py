@@ -34,7 +34,6 @@ def _allocate(total: int, weights: list[float]) -> list[int]:
 def allocate_lane_budgets(schedule: dict[str, Any], model_policy: dict[str, Any], *,
                           context_tokens: int = 12000, output_tokens: int = 4000,
                           model_calls: int = 10) -> dict[str, Any]:
-    """Split an aggregate task budget across schedule lanes without creating a second total budget."""
     nodes = schedule.get("nodes", [])
     roles = model_policy.get("roles", {})
     weights = [ROLE_WEIGHTS.get(str(n.get("role")), 1.0) for n in nodes]
