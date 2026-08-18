@@ -16,9 +16,9 @@ def route_task(task:str,repo:pathlib.Path|str|None=None,forced_type:str|None=Non
         if forced_type not in ROUTES: raise ValueError(f"Unknown forced task type: {forced_type}")
         selected=forced_type
     else: selected=max(scores,key=lambda k:(scores[k],k)) if any(scores.values()) else "understand"
-    rule=ROUTES[selected]; required=list(rule["capabilities"]); complexity=classify_complexity(task,selected); risk=classify_risk(task,selected)
+    rule=ROUTES[selected]; required=list(dict.fromkeys([*rule["capabilities"],"context.trust-boundary"])); complexity=classify_complexity(task,selected); risk=classify_risk(task,selected)
     optional=["harness.complexity","harness.risk-routing","harness.model-routing","orchestration.scheduler","context.lane-budget","quality.gate","harness.retry-policy"]
-    if complexity["multi_agent_recommended"]: optional += ["context.handoff","context.artifact","orchestration.handoff"]
+    if complexity["multi_agent_recommended"]: optional += ["context.handoff","context.artifact","context.fan-in","context.contradiction","context.synthesis-packet","context.schema","context.streaming","context.tokenizer","context.candidate-detection","context.deterministic-verifier","context.git-provenance","context.model-packet","context.model-context","context.control-plane","context.adaptive-reduction","quality.token-economics","quality.scenario-simulation","orchestration.handoff"]
     if complexity["level"] in {"complex","autonomous"}: optional += ["knowledge.search"]
     if complexity["level"]=="autonomous": optional += ["executor.autonomous"]
     result={"task_type":selected,"classification":"explicit" if forced_type else "heuristic","scores":scores,"workflow":rule["workflow"],"policies":rule["policies"],"required_capabilities":required,"optional_capabilities":list(dict.fromkeys(optional)),"complexity":complexity,"risk":risk,"context_strategy":"detect-reuse-delegate-native-fallback","recommended_command":f'repo-context context . {task!r} --budget 6000',"routing_rule":"Read only the returned workflow/policy references; do not preload every reference file."}

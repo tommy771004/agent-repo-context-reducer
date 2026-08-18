@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Token Estimate",
+  "type": "object",
+  "required": ["tokens", "tokenizer", "exact"],
+  "properties": {
+    "tokens": {"type": "integer", "minimum": 0},
+    "tokenizer": {"type": "string", "minLength": 1},
+    "exact": {"type": "boolean"},
+    "model": {"type": ["string", "null"]},
+    "encoding": {"type": ["string", "null"]},
+    "description": {"type": "string"}
+  },
+  "additionalProperties": true
+}

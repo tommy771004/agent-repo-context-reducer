@@ -1,0 +1,4 @@
+{
+  "required_claims": ["Payment status updates are asynchronous"],
+  "forbidden_claims": ["Payment status updates are always synchronous"]
+}

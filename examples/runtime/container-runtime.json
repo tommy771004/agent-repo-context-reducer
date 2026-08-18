@@ -1,0 +1,25 @@
+{
+  "adapter": "container",
+  "wall_seconds": 300,
+  "checkpoint": true,
+  "container": {
+    "engine": "auto",
+    "image": "python:3.13-slim",
+    "pull": "never",
+    "network": "none",
+    "repo_mode": "ro",
+    "workdir": "/workspace",
+    "read_only_root": true,
+    "drop_all_capabilities": true,
+    "no_new_privileges": true,
+    "pids_limit": 128,
+    "memory": "512m",
+    "cpus": 1.0,
+    "user": "65534:65534",
+    "tmpfs": ["/tmp:rw,noexec,nosuid,size=64m"]
+  },
+  "default": {
+    "argv": ["python3", "examples/runtime/mock_worker.py"],
+    "timeout_seconds": 60
+  }
+}

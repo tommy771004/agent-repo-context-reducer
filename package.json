@@ -1,17 +1,29 @@
 {
   "name": "agent-repo-context-reducer-skill",
-  "version": "1.5.0",
+  "version": "2.2.0",
   "private": true,
-  "description": "Provider-aware repository context reducer with deterministic multi-agent fan-in.",
+  "description": "Provider-aware repository context reducer and bounded agent runtime with unified dedup, thin model/control planes, adaptive token economics, sandboxing, durable runs, and deterministic verification.",
   "scripts": {
     "test": "python3 -m unittest discover -s tests -v",
     "demo": "python3 scripts/repo_context.py context examples/sample-project \"payment checkout order\" --budget 1800 --pretty",
-    "fan-in": "python3 -m repo_context.fan_in_cli examples/fan-in/worker-outputs.json --pretty",
+    "fan-in": "python3 scripts/repo_context.py fan-in examples/fan-in/worker-outputs.json --pretty",
     "doctor": "python3 scripts/repo_context.py doctor examples/sample-project --pretty",
     "commands": "python3 scripts/repo_context.py commands --pretty",
     "host:claude": "python3 scripts/repo_context.py host-install --host claude-code --scope project --repo . --pretty",
     "host:codex": "python3 scripts/repo_context.py host-install --host codex --scope project --repo . --pretty",
     "plan": "python3 scripts/repo_context.py plan \"Refactor authentication across the repo\" --repo . --pretty",
-    "manifest": "python3 scripts/generate_capabilities.py"
+    "manifest": "python3 scripts/generate_capabilities.py",
+    "schema": "python3 scripts/repo_context.py schema list --pretty",
+    "benchmark:e2e": "python3 scripts/repo_context.py benchmark-e2e examples/benchmark-e2e.json --pretty",
+    "fan-in:stream": "python3 scripts/repo_context.py fan-in examples/fan-in/worker-outputs.ndjson --format ndjson --pretty",
+    "tokenizer": "python3 scripts/repo_context.py tokenizer status --pretty",
+    "provenance": "python3 scripts/repo_context.py provenance repo . --pretty",
+    "candidate": "python3 scripts/repo_context.py candidate-detect examples/candidate-findings.json --provider lexical --pretty",
+    "runtime": "python3 scripts/repo_context.py runtime status --pretty",
+    "runtime:demo": "python3 scripts/repo_context.py runtime execute \"Autonomously implement an end-to-end payment migration across the entire project and ship production-ready integration\" --repo . --config examples/runtime/subprocess-runtime.json --allow-external-commands --no-context --model-calls 12 --final-case examples/runtime/final-answer-case.json --pretty",
+    "filter:audit": "python3 scripts/repo_context.py filter-audit examples/filter-dedup/reduction.example.json --pretty",
+    "simulate": "python3 scripts/repo_context.py simulate-reduction examples/reduction-scenarios.json --pretty",
+    "release:gate": "python3 scripts/release_gate.py",
+    "runtime:auto": "python3 scripts/repo_context.py runtime execute \"fix typo\" --repo . --config examples/runtime/subprocess-runtime.json --allow-external-commands --no-context --reduction-mode auto --no-checkpoint --pretty"
   }
 }

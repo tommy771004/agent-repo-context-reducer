@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, json, pathlib, sys
 from typing import Any
-from .benchmark import benchmark_tasks, load_tasks
+from .benchmark import benchmark_tasks, load_tasks, benchmark_reducer_cases, load_benchmark_cases
 from .command_facade import get_facade, list_facades
 from .capabilities import detect_providers, doctor, resolve_capability
 from .context_command import execute_context
@@ -13,10 +13,28 @@ from .config import load_config, trust_provider, prefer_provider
 from .delegate import delegate_capability
 from .external_context import load_external_file
 from .fanout import recommend_fanout
+from .fan_in import reduce_worker_outputs, reduce_worker_stream
+from .filter_audit import audit_filter_reduction
+from .model_packet import split_model_packet
+from .adaptive_reduction import choose_reduction_mode
+from .scenario_simulation import simulate_scenarios
+from .synthesis_packet import build_synthesis_packet
+from .streaming import iter_worker_input
+from .tokenizer import tokenizer_status, token_estimate
+from .candidate_detection import analyze_candidates, candidate_provider_status
+from .git_provenance import repository_provenance, file_provenance, symbol_provenance
+from .schema_registry import list_schemas, load_schema, validate_contract
+from .trust_boundary import classify_untrusted_text
 from .handoff import reduce_handoff
 from .host_adapters import install_host_commands, host_status, uninstall_host_commands
 from .indexer import build_persistent, ensure_index, index_status
 from .orchestration import plan_harness
+from .runtime_adapters import runtime_adapter_status
+from .runtime_engine import execute_runtime, load_runtime_config
+from .runtime_state import RuntimeCheckpointStore, list_runtime_runs
+from .answer_evaluation import evaluate_final_answer
+from .context_planner import build_context
+from .trace import new_run_id
 from .provider_health import ProviderHealth
 from .router import route_task
 from .scheduler import build_schedule
@@ -77,6 +95,72 @@ def main(argv:list[str]|None=None)->int:
         if args.command=='complexity': result=classify_complexity(args.task,args.intent)
         elif args.command=='plan': result=plan_harness(args.task,args.repo,forced_type=args.intent,context_tokens=args.context_budget,output_tokens=args.output_budget,model_calls=args.model_calls)
         elif args.command=='schedule': result=build_schedule(args.task,args.intent)
+        elif args.command=='runtime':
+            if args.action=='status':
+                result={
+                    "adapters":runtime_adapter_status(),
+                    "execution_policy":{
+                        "subprocess_requires_allow_external_commands":True,
+                        "container_network_default":"none",
+                        "container_repository_default":"read-only",
+                        "network_requires_allow_runtime_network":True,
+                        "repository_write_requires_allow_runtime_write":True,
+                        "shell":False,"cost_inference":False,
+                        "checkpoint_default":True,
+                    },
+                }
+            elif args.action=='list':
+                result={"runs":list_runtime_runs(args.repo,args.limit)}
+            elif args.action=='inspect':
+                if not args.task: raise ValueError('runtime inspect requires RUN_ID')
+                result=RuntimeCheckpointStore(args.repo,args.task).summary()
+            elif args.action=='resume':
+                if not args.task: raise ValueError('runtime resume requires RUN_ID')
+                if not args.config: raise ValueError('runtime resume requires --config')
+                rid=args.task
+                checkpoint_data=RuntimeCheckpointStore(args.repo,rid).load()
+                task=str(checkpoint_data.get('task') or '')
+                if not task: raise ValueError('runtime checkpoint does not contain a task')
+                settings=checkpoint_data.get('resume_settings') if isinstance(checkpoint_data.get('resume_settings'),dict) else {}
+                config=load_runtime_config(args.config)
+                context_pack=None
+                if args.context_json:
+                    context_pack=_load_user_payload(args.context_json)
+                    if not isinstance(context_pack,dict): raise ValueError('--context-json must contain a JSON object')
+                elif bool(settings.get('context_present')):
+                    idx=ensure_index(args.repo,sync=True,use_cache=True)["index"]
+                    context_pack=build_context(idx,task,budget=int(settings.get('context_tokens',12000)),session=f"runtime-{rid}",tokenizer=str(settings.get('tokenizer') or 'native'),tokenizer_model=settings.get('tokenizer_model'))
+                final_case=_load_user_payload(args.final_case) if args.final_case else checkpoint_data.get('final_answer_case')
+                if final_case is not None and not isinstance(final_case,dict): raise ValueError('--final-case must contain a JSON object')
+                result=execute_runtime(
+                    task,args.repo,runtime_config=config,adapter_name=args.adapter or checkpoint_data.get('adapter'),forced_type=settings.get('forced_type'),context_pack=context_pack,
+                    context_tokens=int(settings.get('context_tokens',12000)),output_tokens=int(settings.get('output_tokens',4000)),model_calls=int(settings.get('model_calls',10)),
+                    concurrency=args.concurrency,authorize_external=args.allow_external_commands,authorize_network=args.allow_runtime_network,authorize_write=args.allow_runtime_write,
+                    fail_fast=bool(settings.get('fail_fast',True)),resume=True,allow_repo_drift=args.allow_repo_drift,checkpoint=not args.no_checkpoint,run_id=rid,
+                    tokenizer=str(settings.get('tokenizer') or 'native'),tokenizer_model=settings.get('tokenizer_model'),synthesis_budget=int(settings.get('synthesis_budget',6000)),final_answer_case=final_case,reduction_mode=(args.reduction_mode or settings.get('reduction_mode') or 'compat'),
+                )
+            else:
+                if not args.task: raise ValueError('runtime execute requires TASK')
+                if not args.config: raise ValueError('runtime execute requires --config')
+                config=load_runtime_config(args.config)
+                rid=args.run_id or new_run_id()
+                context_pack=None
+                if args.context_json:
+                    context_pack=_load_user_payload(args.context_json)
+                    if not isinstance(context_pack,dict): raise ValueError('--context-json must contain a JSON object')
+                elif not args.no_context:
+                    idx=ensure_index(args.repo,sync=True,use_cache=True)["index"]
+                    context_pack=build_context(idx,args.task,budget=args.context_budget,session=f"runtime-{rid}",tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
+                final_case=_load_user_payload(args.final_case) if args.final_case else None
+                if final_case is not None and not isinstance(final_case,dict): raise ValueError('--final-case must contain a JSON object')
+                result=execute_runtime(
+                    args.task,args.repo,runtime_config=config,adapter_name=args.adapter,forced_type=args.intent,context_pack=context_pack,context_tokens=args.context_budget,output_tokens=args.output_budget,model_calls=args.model_calls,concurrency=args.concurrency,
+                    authorize_external=args.allow_external_commands,authorize_network=args.allow_runtime_network,authorize_write=args.allow_runtime_write,fail_fast=not args.keep_going,checkpoint=not args.no_checkpoint,run_id=rid,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model,synthesis_budget=args.synthesis_budget,final_answer_case=final_case,reduction_mode=args.reduction_mode,
+                )
+        elif args.command=='evaluate-final':
+            case=_load_user_payload(args.case)
+            if not isinstance(case,dict): raise ValueError('evaluate-final CASE must be a JSON object or JSON file')
+            result=evaluate_final_answer(_load_user_payload(args.answer),case)
         elif args.command=='quality':
             if args.action=='packet':
                 if args.input is None: raise ValueError('quality packet requires TASK and INPUT')
@@ -87,10 +171,77 @@ def main(argv:list[str]|None=None)->int:
                 if not isinstance(payload,dict): raise ValueError('quality evaluate expects a JSON object or JSON file')
                 result=evaluate_grade(payload,risk_level=args.risk_level)
         elif args.command=='retry-decision': result=decide_retry(decision=args.decision,attempt=args.attempt,worker_tier=args.worker_tier,risk_level=args.risk_level,complexity_level=args.complexity_level,force_escalation=args.force_escalation)
+        elif args.command=='fan-in':
+            records,input_meta=iter_worker_input(args.input,input_format=args.format)
+            candidate_provider=None if args.no_candidate_dedup else args.candidate_provider
+            if input_meta.get('streaming'):
+                reduction=reduce_worker_stream(records,min_confidence=args.min_confidence,detect_conflicts=not args.no_conflicts,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model,malformed_detail_limit=args.malformed_detail_limit,filtered_detail_limit=args.filtered_detail_limit,candidate_provider=candidate_provider,candidate_threshold=args.candidate_threshold,max_candidate_pairs=args.max_candidate_pairs,trust_policy=args.trust_policy,unstructured_canonical_policy=args.unstructured_canonical_policy)
+            else:
+                worker_outputs=list(records)
+                reduction=reduce_worker_outputs(worker_outputs,min_confidence=args.min_confidence,detect_conflicts=not args.no_conflicts,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model,candidate_provider=candidate_provider,candidate_threshold=args.candidate_threshold,max_candidate_pairs=args.max_candidate_pairs,trust_policy=args.trust_policy,unstructured_canonical_policy=args.unstructured_canonical_policy,malformed_detail_limit=args.malformed_detail_limit,filtered_detail_limit=args.filtered_detail_limit)
+            filter_audit=audit_filter_reduction(reduction)
+            result={'input':input_meta,'reduction':reduction,'filter_audit':filter_audit,'synthesis_packet':build_synthesis_packet(reduction,max_estimated_tokens=args.budget,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)}
+        elif args.command=='synthesis-packet':
+            payload=_load_user_payload(args.input)
+            if isinstance(payload,dict) and isinstance(payload.get('reduction'),dict): payload=payload['reduction']
+            if not isinstance(payload,dict): raise ValueError('synthesis-packet input must be a fan-in reduction object')
+            result=build_synthesis_packet(payload,max_estimated_tokens=args.budget,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
+        elif args.command=='filter-audit':
+            payload=_load_user_payload(args.input)
+            if isinstance(payload,dict) and isinstance(payload.get('reduction'),dict): payload=payload['reduction']
+            if not isinstance(payload,dict): raise ValueError('filter-audit input must be a fan-in reduction object')
+            result=audit_filter_reduction(payload)
+        elif args.command=='model-packet':
+            payload=_load_user_payload(args.input)
+            if not isinstance(payload,dict): raise ValueError('model-packet input must be a synthesis packet object')
+            result=split_model_packet(payload,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
+        elif args.command=='reduction-route':
+            result=choose_reduction_mode(args.task,source_tokens=args.source_tokens,duplicate_ratio=args.duplicate_ratio,conflict_ratio=args.conflict_ratio,task_type=args.intent,requires_parallel_evidence=args.parallel_evidence)
+        elif args.command=='simulate-reduction':
+            scenarios=None
+            if args.scenarios_json:
+                payload=_load_user_payload(args.scenarios_json)
+                if not isinstance(payload,list): raise ValueError('simulate-reduction input must be a JSON array')
+                scenarios=[row for row in payload if isinstance(row,dict)]
+            result=simulate_scenarios(scenarios)
+        elif args.command=='tokenizer':
+            if args.action=='status': result={'tokenizers':tokenizer_status()}
+            else:
+                if args.input is None: raise ValueError('tokenizer estimate requires INPUT')
+                result=token_estimate(_load_user_payload(args.input),tokenizer=args.provider,model=args.model)
+        elif args.command=='candidate-detect':
+            payload=_load_user_payload(args.input)
+            if isinstance(payload,dict) and isinstance(payload.get('reduction'),dict): payload=payload['reduction']
+            findings=payload.get('findings') if isinstance(payload,dict) else payload
+            if not isinstance(findings,list): raise ValueError('candidate-detect input must be a findings array or reduction object')
+            result=analyze_candidates(findings,provider=args.provider,threshold=args.threshold,max_pairs=args.max_pairs)
+            result['available_providers']=candidate_provider_status()
+        elif args.command=='provenance':
+            if args.action=='repo': result=repository_provenance(args.repo)
+            elif args.action=='file':
+                if not args.path: raise ValueError('provenance file requires PATH')
+                result=file_provenance(args.repo,args.path)
+            else:
+                if not args.path or not args.symbol: raise ValueError('provenance symbol requires PATH SYMBOL')
+                result=symbol_provenance(args.repo,args.path,args.symbol,start_line=args.start_line,end_line=args.end_line,fingerprint=args.fingerprint)
+        elif args.command=='schema':
+            if args.action=='list': result={'schemas':list_schemas()}
+            elif args.action=='get':
+                if not args.name: raise ValueError('schema get requires NAME')
+                result=load_schema(args.name)
+            else:
+                if not args.name or not args.input: raise ValueError('schema validate requires NAME INPUT')
+                result=validate_contract(args.name,_load_user_payload(args.input))
+        elif args.command=='trust-scan':
+            target=pathlib.Path(args.input)
+            text=target.read_text(encoding='utf-8',errors='replace') if target.is_file() else args.input
+            result=classify_untrusted_text(text,source=args.source)
+        elif args.command=='benchmark-e2e':
+            result=benchmark_reducer_cases(load_benchmark_cases(pathlib.Path(args.cases_json)),default_synthesis_budget=args.budget,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
         elif args.command=='handoff':
             root=pathlib.Path(args.repo).resolve(); payload=_load_user_payload(args.input); artifact_id=None
             if args.store_artifact: artifact_id=ArtifactStore(root).put(payload,kind='agent-output',producer=args.from_role)['id']
-            result=reduce_handoff(payload,from_role=args.from_role,to_role=args.to_role,task=args.task,artifact_id=artifact_id,token_budget=args.token_budget)
+            result=reduce_handoff(payload,from_role=args.from_role,to_role=args.to_role,task=args.task,artifact_id=artifact_id,token_budget=args.token_budget,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
         elif args.command=='artifact':
             store=ArtifactStore(pathlib.Path(args.repo).resolve())
             if args.action=='put':
@@ -146,7 +297,16 @@ def main(argv:list[str]|None=None)->int:
         elif args.command=='context': result=execute_context(args)
         elif args.command in REPOSITORY_VIEW_COMMANDS: result=handle_repository_view(args,persistent_index(args))
         else: raise ValueError(f'Unknown command: {args.command}')
-        _print(result,getattr(args,'pretty',False)); return 0
+        _print(result,getattr(args,'pretty',False))
+        if args.command == 'runtime' and getattr(args, 'action', None) in {'execute','resume'} and isinstance(result, dict) and not result.get('success', False):
+            return 3
+        if args.command == 'evaluate-final' and isinstance(result, dict) and not result.get('passed', False):
+            return 3
+        if args.command == 'filter-audit' and isinstance(result, dict) and not result.get('passed', False):
+            return 3
+        if args.command == 'fan-in' and isinstance(result, dict) and isinstance(result.get('filter_audit'), dict) and not result['filter_audit'].get('passed', False):
+            return 3
+        return 0
     except (ValueError,OSError,json.JSONDecodeError) as exc:
         print(f'error: {exc}',file=sys.stderr); return 2
 

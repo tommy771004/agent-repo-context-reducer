@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Fan-In",
+  "type": "object",
+  "required": [
+    "schema",
+    "findings",
+    "contradictions",
+    "malformed",
+    "stats",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-fan-in/v1"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "finding.schema.json"
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "$ref": "contradiction.schema.json"
+      }
+    },
+    "malformed": {
+      "type": "array"
+    },
+    "stats": {
+      "type": "object"
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "trust_summary": {
+      "type": "object"
+    },
+    "filtered": {
+      "type": "array"
+    },
+    "quarantined": {
+      "type": "array"
+    },
+    "filter_summary": {
+      "$ref": "filter-summary.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

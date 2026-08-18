@@ -1,0 +1,36 @@
+[
+  {
+    "worker": "worker-a",
+    "findings": [
+      {
+        "claim": "Payment mode",
+        "evidence": "queue.publish",
+        "source": "src/payment.py",
+        "canonicalKey": "payment|mode",
+        "value": "async",
+        "confidence": 0.95
+      },
+      {
+        "claim": "Payment mode",
+        "evidence": "queue.publish",
+        "source": "src/payment.py",
+        "canonicalKey": "payment|mode",
+        "value": "async",
+        "confidence": 0.95
+      }
+    ]
+  },
+  {
+    "worker": "worker-b",
+    "findings": [
+      {
+        "claim": "Payment mode",
+        "evidence": "legacy direct update",
+        "source": "src/legacy.py",
+        "canonicalKey": "payment|mode",
+        "value": "sync",
+        "confidence": 0.82
+      }
+    ]
+  }
+]

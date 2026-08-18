@@ -78,3 +78,63 @@ def allocate_lane_budgets(schedule: dict[str, Any], model_policy: dict[str, Any]
         "within_model_call_budget": requested_calls <= int(model_calls),
         "note": "Lane budgets are child allocations of the existing task budget; they do not increase the aggregate limit.",
     }
+
+
+def optimize_model_plane_context_budgets(
+    lane_budget: dict[str, Any],
+    *,
+    mode: str,
+    verification_fraction: float | None = None,
+) -> dict[str, Any]:
+    """Reallocate adaptive-mode repository context around thin synthesis packets.
+
+    Graders need only source-targeted verification context and integrators need no second
+    repository copy. Their unused repository-context allocation is returned to evidence
+    workers while preserving the original aggregate context-token ceiling.
+    """
+    if mode not in {"direct", "light", "full"}:
+        return dict(lane_budget)
+    out = {**lane_budget, "lanes": [dict(x) for x in (lane_budget.get("lanes") or [])]}
+    lanes = out["lanes"]
+    total = max(0, int((out.get("aggregate") or {}).get("context_tokens", 0)))
+    if not lanes:
+        return out
+    if verification_fraction is None:
+        verification_fraction = 0.12 if mode == "light" else 0.10
+    verification_fraction = min(0.25, max(0.0, float(verification_fraction)))
+
+    graders = [x for x in lanes if x.get("role") == "grader"]
+    integrators = [x for x in lanes if x.get("role") == "integrator"]
+    evidence = [x for x in lanes if x.get("role") not in {"grader", "integrator"}]
+    if mode == "direct" or not graders:
+        target_grader = 0
+    else:
+        target_grader = round(total * verification_fraction)
+    per_grader = _allocate(target_grader, [1.0] * len(graders)) if graders else []
+    for i, lane in enumerate(graders):
+        lane["context_tokens"] = per_grader[i]
+        lane["context_mode"] = "source-targeted-verification"
+    for lane in integrators:
+        lane["context_tokens"] = 0
+        lane["context_mode"] = "synthesis-only"
+
+    remaining = max(0, total - sum(int(x.get("context_tokens", 0)) for x in graders))
+    if evidence:
+        weights = [ROLE_WEIGHTS.get(str(x.get("role")), 1.0) for x in evidence]
+        allocated = _allocate(remaining, weights)
+        for i, lane in enumerate(evidence):
+            lane["context_tokens"] = allocated[i]
+            lane["context_mode"] = "repository-evidence"
+    out["allocated"] = {
+        **(out.get("allocated") or {}),
+        "context_tokens": sum(int(x.get("context_tokens", 0)) for x in lanes),
+    }
+    out["model_plane_context_policy"] = {
+        "classification": "thin-synthesis-aware-context-reallocation",
+        "mode": mode,
+        "aggregate_context_tokens_preserved": sum(int(x.get("context_tokens", 0)) for x in lanes) <= total,
+        "grader_verification_fraction": verification_fraction if graders else 0.0,
+        "integrator_repository_context_tokens": 0,
+        "policy": "Evidence workers receive repository budget not needed by synthesis-only integrators; graders receive source-targeted verification context only.",
+    }
+    return out

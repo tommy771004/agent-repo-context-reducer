@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Dedup Support",
+  "type": "object",
+  "required": ["schema", "occurrence_count", "providers", "records", "provenance_preserved"],
+  "properties": {
+    "schema": {"const": "repo-context-dedup-support/v1"},
+    "occurrence_count": {"type": "integer", "minimum": 1},
+    "provider_count": {"type": "integer", "minimum": 0},
+    "providers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "location_count": {"type": "integer", "minimum": 0},
+    "locations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "records": {"type": "array", "items": {"type": "object"}},
+    "provenance_preserved": {"const": true}
+  },
+  "additionalProperties": true
+}

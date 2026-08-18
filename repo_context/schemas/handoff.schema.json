@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Handoff",
+  "type": "object",
+  "required": [
+    "schema",
+    "from",
+    "to",
+    "handoff",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-handoff/v1"
+    },
+    "from": {
+      "type": "string",
+      "minLength": 1
+    },
+    "to": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "string"
+    },
+    "artifact_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_sha256": {
+      "type": "string"
+    },
+    "source_estimated_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "handoff": {
+      "type": "object"
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "budget": {
+      "type": "object"
+    },
+    "estimated_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "filter_summary": {
+      "$ref": "filter-summary.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

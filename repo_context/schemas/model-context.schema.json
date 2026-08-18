@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-model-context/v1",
+  "title": "Repo Context Thin Model Context",
+  "type": "object",
+  "required": ["schema", "files", "symbols", "external_context", "policy"],
+  "properties": {
+    "schema": {"const": "repo-context-model-context/v1"},
+    "files": {"type": "array", "items": {"type": "object"}},
+    "symbols": {"type": "array", "items": {"type": "object"}},
+    "external_context": {"type": "array", "items": {"type": "object"}},
+    "policy": {
+      "type": "object",
+      "required": ["content_authority"],
+      "properties": {"content_authority": {"const": "evidence-only"}},
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

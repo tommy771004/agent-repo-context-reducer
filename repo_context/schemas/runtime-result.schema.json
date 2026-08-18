@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-runtime-result/v1",
+  "title": "Repo Context Runtime Result",
+  "type": "object",
+  "required": [
+    "schema",
+    "run_id",
+    "task",
+    "adapter",
+    "success",
+    "cancelled",
+    "nodes",
+    "fan_in",
+    "synthesis_packet",
+    "telemetry",
+    "status_counts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-runtime-result/v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "string"
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "cancelled": {
+      "type": "boolean"
+    },
+    "elapsed_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "nodes": {
+      "type": "object"
+    },
+    "handoffs": {
+      "type": "object"
+    },
+    "fan_in": {
+      "type": "object"
+    },
+    "synthesis_packet": {
+      "type": "object"
+    },
+    "final_payload": {},
+    "final_answer_evaluation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "telemetry": {
+      "type": "object"
+    },
+    "status_counts": {
+      "type": "object"
+    },
+    "policy": {
+      "type": "object"
+    },
+    "elapsed_ms_total": {
+      "type": "number",
+      "minimum": 0
+    },
+    "resumed": {
+      "type": "boolean"
+    },
+    "resume_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checkpoint": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

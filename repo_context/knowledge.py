@@ -10,6 +10,7 @@ from typing import Any
 
 from .storage import prepare_state_dir, state_dir
 from .util import DEFAULT_IGNORE_DIRS, estimate_tokens_from_bytes, is_secret_path, safe_read_text
+from .trust_boundary import classify_untrusted_text
 
 KNOWLEDGE_SUFFIXES = {".md", ".mdx", ".txt", ".rst"}
 PREFERRED_PARTS = {"docs", "doc", "adr", "adrs", "architecture", "decisions", "design", "rfcs", "rfc"}
@@ -95,7 +96,8 @@ def search_knowledge(root: pathlib.Path | str, query: str, top_k: int = 8, budge
         tokens = estimate_tokens_from_bytes(len(snippet.encode("utf-8")))
         if results and used + tokens > budget:
             continue
-        results.append({"path": doc.get("path"), "score": score, "headings": doc.get("headings", [])[:8], "snippet": snippet, "estimated_tokens": tokens})
+        results.append({"path": doc.get("path"), "score": score, "headings": doc.get("headings", [])[:8], "snippet": snippet, "estimated_tokens": tokens,
+                        "trust": classify_untrusted_text(snippet, source="repository-knowledge")})
         used += tokens
         if len(results) >= top_k or used >= budget:
             break

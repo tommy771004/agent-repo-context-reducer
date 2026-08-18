@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Candidate Analysis",
+  "type": "object",
+  "required": ["classification", "provider", "semantic_similarity_used", "pairs", "policy"],
+  "properties": {
+    "classification": {"const": "candidate-detection-with-deterministic-verification"},
+    "provider": {"type": "string", "minLength": 1},
+    "semantic_similarity_used": {"type": "boolean"},
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "verified_duplicate_candidates": {"type": "integer", "minimum": 0},
+    "contradiction_candidates": {"type": "integer", "minimum": 0},
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["left_index", "right_index", "score", "verification"],
+        "properties": {
+          "left_index": {"type": "integer", "minimum": 0},
+          "right_index": {"type": "integer", "minimum": 0},
+          "score": {"type": "number", "minimum": 0, "maximum": 1},
+          "verification": {
+            "type": "object",
+            "required": ["verdict", "merge_authorized"],
+            "properties": {
+              "verdict": {"type": "string"},
+              "merge_authorized": {"type": "boolean"}
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

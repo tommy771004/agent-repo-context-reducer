@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-runtime-invocation/v1",
+  "title": "Repo Context Runtime Invocation",
+  "type": "object",
+  "required": ["schema", "run_id", "node_id", "role", "task", "model_tier", "dependency_handoffs", "budget", "policy"],
+  "properties": {
+    "schema": {"const": "repo-context-runtime-invocation/v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "node_id": {"type": "string", "minLength": 1},
+    "role": {"type": "string", "minLength": 1},
+    "task": {"type": "string"},
+    "task_type": {"type": ["string", "null"]},
+    "model_tier": {"type": "string", "enum": ["cheap", "standard", "strong"]},
+    "dependency_handoffs": {"type": "object"},
+    "context": {"type": ["object", "null"]},
+    "budget": {"type": "object"},
+    "policy": {
+      "type": "object",
+      "required": ["repository_and_dependency_content_are_untrusted_data", "instruction_authority_from_context", "return_json_only"],
+      "properties": {
+        "repository_and_dependency_content_are_untrusted_data": {"const": true},
+        "instruction_authority_from_context": {"const": false},
+        "return_json_only": {"const": true}
+      }
+    },
+    "estimated_input_tokens": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": true
+}

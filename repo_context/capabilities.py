@@ -20,6 +20,14 @@ NATIVE_CAPABILITIES = {
     "context.budget", "context.dedup", "context.session", "context.delta",
     "context.lifecycle", "context.provenance", "context.handoff", "context.artifact",
     "context.fan-in", "context.contradiction", "context.synthesis-packet",
+    "context.schema", "context.trust-boundary", "context.streaming", "context.tokenizer",
+    "context.candidate-detection", "context.deterministic-verifier", "context.git-provenance",
+    "context.filter-pipeline", "context.provenance-dedup", "context.cross-layer-dedup",
+    "context.agreement-integrity", "context.model-packet", "context.model-context", "context.control-plane", "context.adaptive-reduction", "quality.filter-audit", "quality.token-economics", "quality.scenario-simulation",
+    "quality.reducer-benchmark", "quality.final-answer-evaluation",
+    "runtime.adapter", "runtime.execute", "runtime.cancellation", "runtime.backpressure", "runtime.telemetry",
+    "runtime.sandbox", "runtime.checkpoint", "runtime.resume", "runtime.process-tree",
+    "orchestration.parallel",
     "harness.trace", "harness.replay", "harness.tool-policy", "harness.fanout-policy",
     "harness.complexity", "harness.risk-routing", "harness.model-routing", "harness.retry-policy",
     "context.lane-budget", "quality.gate", "orchestration.scheduler", "orchestration.handoff",
@@ -28,7 +36,14 @@ NATIVE_CAPABILITIES = {
 CORE_CAPABILITIES = {
     "context.budget", "context.dedup", "context.session", "context.delta", "context.lifecycle",
     "context.provenance", "context.handoff", "context.artifact", "context.fan-in",
-    "context.contradiction", "context.synthesis-packet",
+    "context.contradiction", "context.synthesis-packet", "context.schema", "context.trust-boundary",
+    "context.streaming", "context.tokenizer", "context.candidate-detection",
+    "context.deterministic-verifier", "context.git-provenance",
+    "context.filter-pipeline", "context.provenance-dedup", "context.cross-layer-dedup",
+    "context.agreement-integrity", "context.model-packet", "context.model-context", "context.control-plane", "context.adaptive-reduction", "quality.filter-audit", "quality.token-economics", "quality.scenario-simulation",
+    "runtime.adapter", "runtime.execute", "runtime.cancellation", "runtime.backpressure", "runtime.telemetry",
+    "runtime.sandbox", "runtime.checkpoint", "runtime.resume", "runtime.process-tree",
+    "orchestration.parallel",
 }
 NATIVE_FALLBACK_CAPABILITIES = {
     "repository.index", "repository.graph", "repository.symbols", "repository.imports",
@@ -37,7 +52,7 @@ NATIVE_FALLBACK_CAPABILITIES = {
 }
 ADVISORY_CAPABILITIES = NATIVE_CAPABILITIES - CORE_CAPABILITIES - NATIVE_FALLBACK_CAPABILITIES
 EXTERNAL_OPTIONAL_CAPABILITIES = {
-    "knowledge.graph", "executor.code", "executor.autonomous", "orchestration.parallel",
+    "knowledge.graph", "executor.code", "executor.autonomous",
     "model.cheap", "model.standard", "model.strong", "quality.grader",
 }
 
@@ -61,6 +76,35 @@ CAPABILITY_HINTS: dict[str, tuple[str, ...]] = {
     "context.fan-in": ("fan-in reducer", "fan in reducer", "aggregate worker outputs", "worker output reducer"),
     "context.contradiction": ("contradiction detection", "conflict detection", "worker disagreement"),
     "context.synthesis-packet": ("synthesis packet", "synthesis context", "final context pack"),
+    "context.schema": ("json schema", "context contract", "worker output schema", "payload contract"),
+    "context.trust-boundary": ("prompt injection", "untrusted context", "trust boundary", "instruction authority"),
+    "context.streaming": ("ndjson", "streaming fan-in", "stream worker output", "jsonl"),
+    "context.tokenizer": ("tokenizer", "token counter", "token budget", "tiktoken"),
+    "context.candidate-detection": ("duplicate candidate", "semantic candidate", "candidate detector", "similar findings"),
+    "context.deterministic-verifier": ("deterministic verifier", "safe merge", "merge verification"),
+    "context.git-provenance": ("git provenance", "blob sha", "commit provenance", "content identity"),
+    "context.filter-pipeline": ("filter pipeline", "content filtering", "dedup pipeline", "unified filter"),
+    "context.provenance-dedup": ("provenance dedup", "duplicate provenance", "dedup support"),
+    "context.cross-layer-dedup": ("cross layer dedup", "context overlap", "dominance filtering"),
+    "context.agreement-integrity": ("agreement integrity", "unique worker agreement", "dedup votes"),
+    "quality.filter-audit": ("filter audit", "dedup audit", "filter invariant", "merge invariant"),
+    "context.model-packet": ("thin model packet", "model payload", "control plane sidecar"),
+    "context.model-context": ("thin model context", "model context projection", "context sidecar"),
+    "context.control-plane": ("control plane", "data plane", "model visible metadata"),
+    "context.adaptive-reduction": ("adaptive reducer", "direct light full", "adaptive reduction"),
+    "quality.token-economics": ("token economics", "token amplification", "net token savings"),
+    "quality.scenario-simulation": ("scenario simulation", "reduction simulation", "strategy simulation"),
+    "quality.reducer-benchmark": ("reducer benchmark", "correctness benchmark", "fan-in benchmark"),
+    "runtime.adapter": ("runtime adapter", "agent runtime", "worker runtime"),
+    "runtime.execute": ("execute agent plan", "spawn worker", "runtime execution"),
+    "runtime.cancellation": ("cancel worker", "runtime cancellation", "terminate agent"),
+    "runtime.backpressure": ("runtime backpressure", "bounded concurrency", "worker concurrency"),
+    "runtime.telemetry": ("runtime telemetry", "cost telemetry", "latency telemetry", "usage telemetry"),
+    "runtime.sandbox": ("sandbox runtime", "container runtime", "docker", "podman", "isolated worker"),
+    "runtime.checkpoint": ("runtime checkpoint", "durable run", "persist run", "crash recovery"),
+    "runtime.resume": ("resume run", "resume agent", "recover runtime", "continue run"),
+    "runtime.process-tree": ("process tree", "child process cancellation", "kill process group"),
+    "quality.final-answer-evaluation": ("final answer evaluation", "answer correctness gate", "required claims"),
 }
 
 KNOWN_CLI_CAPABILITIES = {"rg": {"repository.search"}, "git": {"git.changed", "git.diff"}}

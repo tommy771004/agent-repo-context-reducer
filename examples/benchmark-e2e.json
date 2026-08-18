@@ -1,0 +1,71 @@
+[
+  {
+    "task": "Determine payment update mode",
+    "worker_outputs": [
+      {
+        "worker": "research-a",
+        "findings": [
+          {
+            "claim": "Payment status update is asynchronous",
+            "evidence": "queue.publish(payment_id)",
+            "source": "src/payment.py",
+            "canonicalKey": "payment|status-update-mode",
+            "value": 1,
+            "confidence": 0.92
+          }
+        ]
+      },
+      {
+        "worker": "research-b",
+        "findings": [
+          {
+            "claim": "Payment status update is asynchronous",
+            "evidence": "publish_status_update(payment_id)",
+            "source": "src/queue.py",
+            "canonicalKey": "payment|status-update-mode",
+            "value": 1,
+            "confidence": 0.87
+          }
+        ]
+      }
+    ],
+    "required_claims": ["Payment status update is asynchronous"],
+    "forbidden_claims": ["Payment status update is synchronous"],
+    "required_sources": ["src/payment.py", "src/queue.py"],
+    "expected_contradiction_count": 0,
+    "max_malformed_count": 0,
+    "synthesis_budget": 3000
+  },
+  {
+    "task": "Surface conflicting payment mode evidence",
+    "worker_outputs": [
+      {
+        "worker": "worker-a",
+        "findings": [
+          {
+            "claim": "Payment mode is asynchronous",
+            "evidence": "queue path",
+            "source": "src/a.py",
+            "canonicalKey": "payment|mode",
+            "value": 1
+          }
+        ]
+      },
+      {
+        "worker": "worker-b",
+        "findings": [
+          {
+            "claim": "Payment mode is synchronous",
+            "evidence": "direct path",
+            "source": "src/b.py",
+            "canonicalKey": "payment|mode",
+            "value": 0
+          }
+        ]
+      }
+    ],
+    "required_claims": ["Payment mode is asynchronous", "Payment mode is synchronous"],
+    "expected_contradiction_count": 1,
+    "synthesis_budget": 3000
+  }
+]

@@ -24,6 +24,7 @@ HOSTS = ("claude-code", "codex")
 SCOPES = ("project", "global")
 REGENERABLE_STATE = (
     "index.json", "cache", "sessions", "runs", "budgets", "lifecycle", "provider-health.json", "knowledge.json",
+    "telemetry", "runtime-runs",
 )
 PRESERVED_STATE = ("config.json", "providers.json", "providers.d", "artifacts")
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Filter Summary",
+  "type": "object",
+  "required": ["schema", "classification"],
+  "properties": {
+    "schema": {"const": "repo-context-filter-summary/v1"},
+    "classification": {
+      "enum": [
+        "deterministic-filter-and-dedup-summary",
+        "deterministic-handoff-filter-summary",
+        "context-cross-layer-filter-summary"
+      ]
+    },
+    "reason_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "token_savings": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "external": {"type": "object"},
+    "structure_dominance": {"type": "object"}
+  },
+  "additionalProperties": true
+}

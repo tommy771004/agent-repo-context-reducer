@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Synthesis Packet",
+  "type": "object",
+  "required": [
+    "schema",
+    "findings",
+    "contradictions",
+    "reducer_summary",
+    "budget",
+    "policy"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-synthesis-packet/v1"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "finding.schema.json"
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "$ref": "contradiction.schema.json"
+      }
+    },
+    "reducer_summary": {
+      "type": "object"
+    },
+    "budget": {
+      "type": "object"
+    },
+    "policy": {
+      "type": "object"
+    },
+    "trust_summary": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

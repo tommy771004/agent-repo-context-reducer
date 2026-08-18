@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-runtime-state/v1",
+  "title": "Repo Context Durable Runtime State",
+  "type": "object",
+  "required": ["schema", "run_id", "status", "task", "adapter", "config_sha256", "plan_sha256", "results", "handoffs", "counters", "repository_identity"],
+  "properties": {
+    "schema": {"const": "repo-context-runtime-state/v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["running", "resuming", "completed", "failed", "cancelled"]},
+    "task": {"type": "string"},
+    "adapter": {"type": "string", "minLength": 1},
+    "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "resume_settings_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "repository_identity": {"type": "object"},
+    "results": {"type": "object"},
+    "handoffs": {"type": "object"},
+    "worker_outputs": {"type": "object"},
+    "execution_waves": {"type": "array"},
+    "counters": {"type": "object"},
+    "resume_count": {"type": "integer", "minimum": 0},
+    "elapsed_ms_total": {"type": "number", "minimum": 0}
+  },
+  "additionalProperties": true
+}

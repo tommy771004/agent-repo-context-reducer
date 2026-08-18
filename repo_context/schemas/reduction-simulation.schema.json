@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-reduction-simulation/v1",
+  "title": "Repo Context Reduction Scenario Simulation",
+  "type": "object",
+  "required": ["schema", "classification", "scenarios", "aggregate", "recommended_policy", "limitations"],
+  "properties": {
+    "schema": {"const": "repo-context-reduction-simulation/v1"},
+    "classification": {"const": "deterministic-routing-economics-simulation"},
+    "scenarios": {"type": "array", "items": {"type": "object"}},
+    "aggregate": {"type": "object"},
+    "recommended_policy": {"const": "adaptive"},
+    "why": {"type": "string"},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

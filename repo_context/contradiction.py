@@ -36,11 +36,15 @@ def identity_key(finding: dict[str, Any]) -> str | None:
     return f"tuple:{subject}|{predicate}|{period}|{unit}"
 
 
-def _numeric_value(value: Any) -> float | int | None:
+def comparable_assertion_value(value: Any) -> tuple[str, Any] | None:
+    """Normalize scalar assertion values without inventing semantic equivalence."""
     if isinstance(value, bool):
-        return None
+        return ("bool", value)
     if isinstance(value, (int, float)) and math.isfinite(float(value)):
-        return value
+        number = float(value)
+        return ("number", int(number) if number.is_integer() else number)
+    if isinstance(value, str) and value.strip():
+        return ("string", normalize_identity_text(value))
     return None
 
 
@@ -62,9 +66,9 @@ def detect_contradictions(findings: list[dict[str, Any]]) -> list[dict[str, Any]
             if normalize_identity_text(item.get("polarity"))
         }
         values = {
-            _numeric_value(item.get("value"))
+            comparable_assertion_value(item.get("value"))
             for item in group
-            if _numeric_value(item.get("value")) is not None
+            if comparable_assertion_value(item.get("value")) is not None
         }
 
         reasons: list[str] = []
@@ -88,6 +92,7 @@ def detect_contradictions(findings: list[dict[str, Any]]) -> list[dict[str, Any]
                     "value": item.get("value"),
                     "unit": item.get("unit"),
                     "polarity": item.get("polarity"),
+                    "reducer": item.get("reducer") if isinstance(item.get("reducer"), dict) else None,
                 }
                 for item in group
             ],

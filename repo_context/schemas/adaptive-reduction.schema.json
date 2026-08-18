@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-adaptive-reduction/v1",
+  "title": "Repo Context Adaptive Reduction Decision",
+  "type": "object",
+  "required": ["schema", "classification", "selected_mode", "inputs", "eligibility", "policy"],
+  "properties": {
+    "schema": {"const": "repo-context-adaptive-reduction/v1"},
+    "classification": {"const": "deterministic-safety-first-reduction-routing"},
+    "selected_mode": {"enum": ["direct", "light", "full"]},
+    "reason": {"type": "string"},
+    "inputs": {"type": "object"},
+    "eligibility": {"type": "object"},
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

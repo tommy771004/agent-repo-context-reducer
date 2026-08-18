@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-sandbox-policy/v1",
+  "title": "Repo Context Container Sandbox Policy",
+  "type": "object",
+  "required": [
+    "classification",
+    "network",
+    "repo_mode",
+    "read_only_root",
+    "drop_all_capabilities",
+    "no_new_privileges",
+    "pids_limit",
+    "memory",
+    "cpus"
+  ],
+  "properties": {
+    "classification": {
+      "const": "container-sandbox-policy"
+    },
+    "engine_requested": {
+      "type": "string"
+    },
+    "engine": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "image": {
+      "type": "string"
+    },
+    "network": {
+      "type": "string"
+    },
+    "repo_mode": {
+      "enum": [
+        "ro",
+        "rw",
+        "none"
+      ]
+    },
+    "read_only_root": {
+      "type": "boolean"
+    },
+    "drop_all_capabilities": {
+      "type": "boolean"
+    },
+    "no_new_privileges": {
+      "type": "boolean"
+    },
+    "pids_limit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "memory": {
+      "type": "string"
+    },
+    "cpus": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "user": {
+      "type": "string"
+    },
+    "tmpfs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pull": {
+      "enum": [
+        "never",
+        "missing",
+        "always"
+      ]
+    },
+    "image_pinned": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

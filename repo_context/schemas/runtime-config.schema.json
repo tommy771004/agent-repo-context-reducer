@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-runtime-config/v1",
+  "title": "Repo Context Runtime Config",
+  "type": "object",
+  "required": [
+    "adapter"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wall_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "handoff_token_budget": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "inherit_env": {
+      "type": "boolean"
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "roles": {
+      "type": "object"
+    },
+    "nodes": {
+      "type": "object"
+    },
+    "default": {
+      "type": "object"
+    },
+    "checkpoint": {
+      "type": "boolean"
+    },
+    "checkpoint_payload_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cancellation_grace_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "retry_failed_workers": {
+      "type": "boolean"
+    },
+    "enforce_quality_gate": {
+      "type": "boolean"
+    },
+    "enforce_lane_budgets": {
+      "type": "boolean"
+    },
+    "container": {
+      "type": "object",
+      "properties": {
+        "engine": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "repo_mode": {
+          "enum": [
+            "ro",
+            "rw",
+            "none"
+          ]
+        },
+        "workdir": {
+          "type": "string"
+        },
+        "read_only_root": {
+          "type": "boolean"
+        },
+        "drop_all_capabilities": {
+          "type": "boolean"
+        },
+        "no_new_privileges": {
+          "type": "boolean"
+        },
+        "pids_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "memory": {
+          "type": "string"
+        },
+        "cpus": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "user": {
+          "type": "string"
+        },
+        "tmpfs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pull": {
+          "enum": [
+            "never",
+            "missing",
+            "always"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "reduction_mode": {
+      "enum": [
+        "compat",
+        "auto",
+        "direct",
+        "light",
+        "full"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "small-single-file",
+    "source_tokens": 3000,
+    "baseline_output_tokens": 700,
+    "duplicate_ratio": 0.05,
+    "conflict_ratio": 0.0,
+    "complexity": "focused",
+    "risk": "low",
+    "workers": 1
+  },
+  {
+    "name": "medium-cross-file-repetitive",
+    "source_tokens": 14000,
+    "baseline_output_tokens": 1200,
+    "duplicate_ratio": 0.38,
+    "conflict_ratio": 0.01,
+    "complexity": "focused",
+    "risk": "medium",
+    "workers": 1
+  },
+  {
+    "name": "large-high-dup-investigation",
+    "source_tokens": 55000,
+    "baseline_output_tokens": 1800,
+    "duplicate_ratio": 0.55,
+    "conflict_ratio": 0.02,
+    "complexity": "complex",
+    "risk": "medium",
+    "workers": 3,
+    "requires_parallel_evidence": true
+  },
+  {
+    "name": "conflicting-evidence",
+    "source_tokens": 32000,
+    "baseline_output_tokens": 1800,
+    "duplicate_ratio": 0.22,
+    "conflict_ratio": 0.14,
+    "complexity": "complex",
+    "risk": "high",
+    "workers": 3,
+    "requires_parallel_evidence": true
+  },
+  {
+    "name": "large-low-dup-provenance",
+    "source_tokens": 26000,
+    "baseline_output_tokens": 1500,
+    "duplicate_ratio": 0.06,
+    "conflict_ratio": 0.01,
+    "complexity": "complex",
+    "risk": "medium",
+    "workers": 3
+  },
+  {
+    "name": "security-sensitive-small",
+    "source_tokens": 4800,
+    "baseline_output_tokens": 900,
+    "duplicate_ratio": 0.1,
+    "conflict_ratio": 0.0,
+    "complexity": "focused",
+    "risk": "high",
+    "workers": 2
+  },
+  {
+    "name": "orchestration-overhead-regression",
+    "source_tokens": 4500,
+    "baseline_output_tokens": 750,
+    "duplicate_ratio": 0.3,
+    "conflict_ratio": 0.0,
+    "complexity": "focused",
+    "risk": "low",
+    "workers": 1
+  }
+]

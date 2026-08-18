@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-final-answer-evaluation/v1",
+  "title": "Repo Context Final Answer Evaluation",
+  "type": "object",
+  "required": ["schema", "classification", "passed", "missing_required_claims", "forbidden_hits", "missing_required_fields", "decision_ok"],
+  "properties": {
+    "schema": {"const": "repo-context-final-answer-evaluation/v1"},
+    "classification": {"const": "deterministic-final-answer-invariant-check"},
+    "passed": {"type": "boolean"},
+    "required_claims": {"type": "array", "items": {"type": "string"}},
+    "required_hits": {"type": "array", "items": {"type": "string"}},
+    "missing_required_claims": {"type": "array", "items": {"type": "string"}},
+    "forbidden_claims": {"type": "array", "items": {"type": "string"}},
+    "forbidden_hits": {"type": "array", "items": {"type": "string"}},
+    "required_fields": {"type": "array", "items": {"type": "string"}},
+    "missing_required_fields": {"type": "array", "items": {"type": "string"}},
+    "decision_ok": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

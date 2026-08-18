@@ -1,37 +1,89 @@
 {
   "project": "tommy771004/agent-repo-context-reducer",
-  "version": "1.5.0",
-  "assembled_date": "2026-08-17",
-  "base_repository_tree_sha": "96385368f5eb6a5795731308303613e0a4850113",
+  "version": "2.2.0",
+  "assembled_date": "2026-08-18",
+  "release_status": "usable-release-gate-passed",
   "validation": {
     "unittest_discover": {
-      "tests_run": 82,
-      "passed": 82,
+      "tests_run": 216,
+      "passed": 216,
       "failed": 0,
       "errors": 0
     },
-    "cli_version": "repo-context 1.5.0",
-    "fan_in_smoke": {
-      "agreement_counts": [
-        2,
-        1
-      ],
-      "contradictions": 1,
-      "status": "passed"
-    },
-    "wheel_build": {
+    "draft_2020_12_schemas": {
+      "count": 26,
       "status": "passed",
-      "file": "dist/agent_repo_context_reducer-1.5.0-py3-none-any.whl",
-      "mode": "--no-build-isolation (offline environment)"
+      "representative_payload_validation": "passed"
+    },
+    "release_gate": "passed",
+    "clean_wheel_install": {
+      "status": "passed",
+      "outside_source_tree": true
+    },
+    "installed_runtime_smoke": {
+      "direct": {
+        "success": true,
+        "model_calls": 1
+      },
+      "full_conflict": {
+        "success": true,
+        "model_calls": 4,
+        "peak_parallel": 2,
+        "filter_audit": true
+      }
     }
   },
-  "v1_5_core": [
-    "deterministic multi-worker fan-in",
-    "structured contradiction surfacing",
-    "asserted-side-aware agreement counting",
-    "bounded synthesis packet",
-    "token-aware handoff reduction",
-    "fan-in benchmark/trace metrics",
-    "provider capability integration"
-  ]
+  "scenario_simulation": {
+    "scenario_count": 7,
+    "static_total_tokens": {
+      "direct": 110262,
+      "light": 115847,
+      "full": 129201
+    },
+    "static_globally_eligible": {
+      "direct": false,
+      "light": false,
+      "full": true
+    },
+    "adaptive_total_tokens": 123936,
+    "adaptive_savings_vs_always_full_tokens": 5265,
+    "adaptive_savings_ratio_vs_always_full": 0.0408,
+    "selection_policy": "safety/correctness eligibility first, token economics second"
+  },
+  "model_plane_sample_native_estimator": {
+    "rich_repository_context_tokens": 11115,
+    "thin_model_context_tokens": 517,
+    "model_context_reduction_ratio": 0.9535,
+    "rich_synthesis_packet_tokens": 922,
+    "thin_model_packet_tokens": 93,
+    "model_packet_reduction_ratio": 0.8991,
+    "note": "Native estimator measurements; not provider billing tokens."
+  },
+  "dedup_sample": {
+    "workers": 8,
+    "raw_valid_findings": 16,
+    "output_findings": 1,
+    "duplicate_count": 15,
+    "max_agreement_count": 8,
+    "note": "Same-worker repetition does not inflate unique-worker agreement."
+  },
+  "v2_2_core": [
+    "unified filter and provenance-preserving dedup",
+    "control-plane/model-plane separation",
+    "thin model context and synthesis packet",
+    "source-targeted grader verification context",
+    "synthesis-only integrator repository context mode",
+    "adaptive direct/light/full reduction routing",
+    "end-to-end token economics with measurement provenance",
+    "multi-scenario simulation and release gate"
+  ],
+  "measurement_caveats": [
+    "Provider-reported token counts and estimator counts are never presented as directly comparable when sources differ.",
+    "Scenario simulation is a deterministic policy/overhead model, not a provider billing forecast or correctness predictor.",
+    "Deterministic local validation/filtering consumes CPU but no model tokens unless serialized into a model request."
+  ],
+  "wheel": {
+    "path": "dist/agent_repo_context_reducer-2.2.0-py3-none-any.whl",
+    "sha256": "cce1eff5909eab13d14354eacdc0bf20e372002ebc3cffc8e700bf61c592e61d"
+  }
 }

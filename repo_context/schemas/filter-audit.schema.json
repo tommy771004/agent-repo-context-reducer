@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Filter Audit",
+  "type": "object",
+  "required": ["schema", "classification", "passed", "violations", "warnings", "metrics"],
+  "properties": {
+    "schema": {"const": "repo-context-filter-audit/v1"},
+    "classification": {"const": "deterministic-filter-invariant-audit"},
+    "passed": {"type": "boolean"},
+    "violations": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "metrics": {"type": "object"},
+    "scope_note": {"type": "string"}
+  },
+  "additionalProperties": true
+}

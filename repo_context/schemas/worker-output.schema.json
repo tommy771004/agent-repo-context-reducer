@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Worker Output",
+  "type": "object",
+  "required": [
+    "findings"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-worker-output/v1"
+    },
+    "worker": {
+      "type": "string"
+    },
+    "worker_id": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "finding.schema.json"
+      }
+    },
+    "provenance": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

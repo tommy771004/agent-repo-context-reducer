@@ -1,0 +1,13 @@
+{
+  "schema": "repo-context-runtime-config/v1",
+  "adapter": "subprocess",
+  "wall_seconds": 120,
+  "handoff_token_budget": 1600,
+  "retry_failed_workers": true,
+  "enforce_quality_gate": true,
+  "inherit_env": false,
+  "default": {
+    "argv": ["{python}", "{repo}/examples/runtime/mock_worker.py"],
+    "timeout_seconds": 15
+  }
+}

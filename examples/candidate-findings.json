@@ -1,0 +1,26 @@
+[
+  {
+    "claim": "Revenue increased 20%",
+    "evidence": "report A",
+    "source": "a.md"
+  },
+  {
+    "claim": "Revenue did not increase 20%",
+    "evidence": "report B",
+    "source": "b.md"
+  },
+  {
+    "claim": "Payment mode is async",
+    "evidence": "queue.publish",
+    "source": "payment.py",
+    "canonicalKey": "payment|mode",
+    "value": 1
+  },
+  {
+    "claim": "Async payment status",
+    "evidence": "event queue",
+    "source": "queue.py",
+    "canonicalKey": "payment|mode",
+    "value": 1
+  }
+]

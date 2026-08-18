@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-model-packet/v1",
+  "title": "Repo Context Thin Model Packet",
+  "type": "object",
+  "required": ["schema", "findings", "contradictions", "sources", "policy"],
+  "properties": {
+    "schema": {"const": "repo-context-model-packet/v1"},
+    "findings": {"type": "array", "items": {"type": "object"}},
+    "contradictions": {"type": "array", "items": {"type": "object"}},
+    "sources": {"type": "object"},
+    "policy": {
+      "type": "object",
+      "required": ["content_authority", "contradictions_preserved"],
+      "properties": {
+        "content_authority": {"const": "evidence-only"},
+        "contradictions_preserved": {"const": true}
+      },
+      "additionalProperties": true
+    },
+    "filter_audit": {"type": "object"}
+  },
+  "additionalProperties": true
+}

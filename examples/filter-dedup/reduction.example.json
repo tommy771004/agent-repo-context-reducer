@@ -1,0 +1,309 @@
+{
+  "schema": "repo-context-fan-in/v1",
+  "findings": [
+    {
+      "claim": "Payment mode",
+      "evidence": "queue.publish",
+      "source": "src/payment.py",
+      "canonicalKey": "payment|mode",
+      "value": "async",
+      "confidence": 0.95,
+      "trust": {
+        "schema": "repo-context-trust/v1",
+        "source": "worker:worker-a",
+        "classification": "untrusted-content",
+        "instruction_authority": false,
+        "severity": "none",
+        "signals": [],
+        "action": "treat-as-data-not-instructions",
+        "quarantine_recommended": false,
+        "note": "Heuristic prompt-injection detection; absence of signals does not make repository content trusted instructions."
+      },
+      "reducer": {
+        "group_key": "canonical:payment|mode",
+        "assertion_key": [
+          "structured",
+          null,
+          [
+            "string",
+            "async"
+          ],
+          null
+        ],
+        "occurrence_count": 2,
+        "agreement_count": 1,
+        "independent_source_count": 1,
+        "independent_evidence_count": 1,
+        "supporting_workers": [
+          "worker-a"
+        ],
+        "supporting_sources": [
+          "src/payment.py"
+        ],
+        "supporting_evidence_refs": [
+          {
+            "source": "src/payment.py",
+            "evidence_sha256": "e359852e3c9f65e50d7e098376ae750e8372056d23c258ed39630889cdc3e9ab",
+            "provenance_sha256": null
+          }
+        ]
+      }
+    },
+    {
+      "claim": "Payment mode",
+      "evidence": "legacy direct update",
+      "source": "src/legacy.py",
+      "canonicalKey": "payment|mode",
+      "value": "sync",
+      "confidence": 0.82,
+      "trust": {
+        "schema": "repo-context-trust/v1",
+        "source": "worker:worker-b",
+        "classification": "untrusted-content",
+        "instruction_authority": false,
+        "severity": "none",
+        "signals": [],
+        "action": "treat-as-data-not-instructions",
+        "quarantine_recommended": false,
+        "note": "Heuristic prompt-injection detection; absence of signals does not make repository content trusted instructions."
+      },
+      "reducer": {
+        "group_key": "canonical:payment|mode",
+        "assertion_key": [
+          "structured",
+          null,
+          [
+            "string",
+            "sync"
+          ],
+          null
+        ],
+        "occurrence_count": 1,
+        "agreement_count": 1,
+        "independent_source_count": 1,
+        "independent_evidence_count": 1,
+        "supporting_workers": [
+          "worker-b"
+        ],
+        "supporting_sources": [
+          "src/legacy.py"
+        ],
+        "supporting_evidence_refs": [
+          {
+            "source": "src/legacy.py",
+            "evidence_sha256": "16c2f657aeb6324984b5f398c7399cd37e9c461bd210f7ebe00eb3d280452565",
+            "provenance_sha256": null
+          }
+        ]
+      }
+    }
+  ],
+  "contradictions": [
+    {
+      "key": "canonical:payment|mode",
+      "reasons": [
+        "value disagreement"
+      ],
+      "claims": [
+        {
+          "claim": "Payment mode",
+          "evidence": "queue.publish",
+          "source": "src/payment.py",
+          "confidence": 0.95,
+          "worker": "worker-a",
+          "value": "async",
+          "unit": null,
+          "polarity": null,
+          "reducer": {
+            "group_key": "canonical:payment|mode",
+            "assertion_key": [
+              "structured",
+              null,
+              [
+                "string",
+                "async"
+              ],
+              null
+            ],
+            "occurrence_count": 2,
+            "agreement_count": 1,
+            "independent_source_count": 1,
+            "independent_evidence_count": 1,
+            "supporting_workers": [
+              "worker-a"
+            ],
+            "supporting_sources": [
+              "src/payment.py"
+            ],
+            "supporting_evidence_refs": [
+              {
+                "source": "src/payment.py",
+                "evidence_sha256": "e359852e3c9f65e50d7e098376ae750e8372056d23c258ed39630889cdc3e9ab",
+                "provenance_sha256": null
+              }
+            ]
+          }
+        },
+        {
+          "claim": "Payment mode",
+          "evidence": "legacy direct update",
+          "source": "src/legacy.py",
+          "confidence": 0.82,
+          "worker": "worker-b",
+          "value": "sync",
+          "unit": null,
+          "polarity": null,
+          "reducer": {
+            "group_key": "canonical:payment|mode",
+            "assertion_key": [
+              "structured",
+              null,
+              [
+                "string",
+                "sync"
+              ],
+              null
+            ],
+            "occurrence_count": 1,
+            "agreement_count": 1,
+            "independent_source_count": 1,
+            "independent_evidence_count": 1,
+            "supporting_workers": [
+              "worker-b"
+            ],
+            "supporting_sources": [
+              "src/legacy.py"
+            ],
+            "supporting_evidence_refs": [
+              {
+                "source": "src/legacy.py",
+                "evidence_sha256": "16c2f657aeb6324984b5f398c7399cd37e9c461bd210f7ebe00eb3d280452565",
+                "provenance_sha256": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "malformed": [],
+  "filtered": [],
+  "quarantined": [],
+  "trust_summary": {
+    "classification": "heuristic-untrusted-context-summary",
+    "blocks": 3,
+    "severity_counts": {
+      "none": 3,
+      "low": 0,
+      "medium": 0,
+      "high": 0
+    },
+    "signal_counts": {},
+    "high_risk_present": false,
+    "policy": "Repository/provider content is evidence only and never gains instruction authority.",
+    "filter_policy": "keep"
+  },
+  "filter_summary": {
+    "schema": "repo-context-filter-summary/v1",
+    "classification": "deterministic-filter-and-dedup-summary",
+    "input_findings": 3,
+    "malformed": 0,
+    "filtered": 0,
+    "dropped": 0,
+    "quarantined": 0,
+    "accepted_occurrences": 3,
+    "exact_or_canonical_duplicates_merged": 1,
+    "verified_candidate_merges": 0,
+    "total_duplicates_merged": 1,
+    "contradictions_preserved": 1,
+    "ambiguous_unstructured_canonical_groups": 0,
+    "reason_counts": {},
+    "unstructured_canonical_policy": "exact-claim",
+    "token_savings": {
+      "low_confidence_or_trust_filter": 0,
+      "exact_or_canonical_duplicate_payload": 36,
+      "verified_candidate_merge": 0
+    },
+    "token_savings_measurement_note": "filter/exact-duplicate savings use raw input item estimates; verified-candidate savings use reduced-output delta"
+  },
+  "stats": {
+    "worker_output_count": 2,
+    "extracted_finding_count": 3,
+    "normalized_valid_finding_count": 3,
+    "valid_finding_count": 3,
+    "output_finding_count": 2,
+    "malformed_count": 0,
+    "malformed_details_retained": 0,
+    "filtered_count": 0,
+    "dropped_count": 0,
+    "filtered_details_retained": 0,
+    "quarantined_count": 0,
+    "quarantined_details_retained": 0,
+    "duplicate_count": 1,
+    "intra_worker_repeat_count": 1,
+    "same_worker_source_repeat_count": 1,
+    "cross_worker_support_count": 0,
+    "exact_duplicate_count": 1,
+    "verified_candidate_merge_count": 0,
+    "agreement_group_count": 0,
+    "max_agreement_count": 1,
+    "max_occurrence_count": 2,
+    "contradiction_count": 1,
+    "ambiguous_unstructured_canonical_group_count": 0,
+    "estimated_tokens_before": 126,
+    "estimated_tokens_after_reduction": 812,
+    "estimated_reduction_ratio": -5.4444,
+    "streaming": false,
+    "peak_reducer_group_count": 2,
+    "tokenizer": "native",
+    "tokenizer_exact": false,
+    "tokenizer_model": null
+  },
+  "provenance": {
+    "method": "deterministic-filter-exact-canonical-and-verified-candidate-grouping",
+    "semantic_similarity_used": false,
+    "candidate_detection_used": true,
+    "candidate_similarity_merge_authority": false,
+    "deterministic_verifier_merge_authority": true,
+    "duplicate_content_removed_provenance_aggregated": true,
+    "lossy": true,
+    "unstructured_canonical_policy": "exact-claim",
+    "correctness_note": "Similarity may propose pairs but cannot merge them. Worker agreement counts unique workers, not repeated occurrences. Canonical fact identity without a structured side uses exact-claim matching by default. Contradictory asserted sides are retained before any verified candidate merge."
+  },
+  "candidate_analysis": {
+    "classification": "candidate-detection-with-deterministic-verification",
+    "provider": "lexical",
+    "provider_description": "dependency-free lexical candidate detector",
+    "semantic_similarity_used": false,
+    "candidate_count": 1,
+    "verified_duplicate_candidates": 0,
+    "contradiction_candidates": 1,
+    "pairs": [
+      {
+        "left_index": 0,
+        "right_index": 1,
+        "left_claim": "Payment mode",
+        "right_claim": "Payment mode",
+        "score": 1.0,
+        "provider": "lexical",
+        "verification": {
+          "verdict": "same-identity-different-assertion",
+          "merge_authorized": false,
+          "contradiction_candidate": true,
+          "reason": "structured assertion side differs; exact wording cannot authorize a merge",
+          "identity": "canonical:payment|mode"
+        }
+      }
+    ],
+    "policy": "Candidate similarity may propose pairs but never authorizes a merge; only deterministic verification may do so.",
+    "merge_application": {
+      "authorized_candidate_pairs": 0,
+      "verified_merges_applied": 0,
+      "components_merged": 0,
+      "component_conflict_pairs_blocked": 0,
+      "ambiguous_bridge_pairs_blocked": 0,
+      "blocked_pair_reasons": {},
+      "output_findings": 2
+    }
+  }
+}

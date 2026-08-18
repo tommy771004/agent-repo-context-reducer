@@ -4,7 +4,9 @@ import hashlib
 import json
 from typing import Any, Iterable
 
-from .util import estimate_tokens_from_bytes
+from .tokenizer import count_tokens, get_tokenizer
+from .filter_engine import deduplicate_exact_list
+from .trust_boundary import classify_untrusted_text
 
 KEY_ALIASES = {
     "summary": ("summary", "result", "conclusion"),
@@ -17,6 +19,8 @@ KEY_ALIASES = {
     "tests": ("tests", "test_results", "verification"),
     "risks": ("risks", "warnings", "concerns"),
 }
+
+HANDOFF_SET_LIKE_FIELDS = {"decisions", "evidence", "targets", "constraints", "open_questions", "changed_files", "tests", "risks"}
 
 DEFAULT_FIELD_PRIORITY = (
     "summary",
@@ -44,14 +48,14 @@ def _bounded(value: Any, max_items: int = 12, max_chars: int = 1600) -> Any:
     return value
 
 
-def _estimated_tokens(value: Any) -> int:
-    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str).encode("utf-8")
-    return estimate_tokens_from_bytes(len(encoded))
+def _estimated_tokens(value: Any, *, tokenizer: str = "native", tokenizer_model: str | None = None) -> int:
+    return count_tokens(value, tokenizer=tokenizer, model=tokenizer_model)
 
 
 def _build_body(*, from_role: str, to_role: str, task: str, artifact_id: str | None,
                 source_hash: str, source_tokens: int, reduced: dict[str, Any],
-                budget: dict[str, Any] | None = None) -> dict[str, Any]:
+                budget: dict[str, Any] | None = None,
+                filter_summary: dict[str, Any] | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {
         "schema": "repo-context-handoff/v1",
         "from": from_role,
@@ -62,26 +66,38 @@ def _build_body(*, from_role: str, to_role: str, task: str, artifact_id: str | N
         "source_estimated_tokens": source_tokens,
         "handoff": reduced,
         "provenance": {"method": "deterministic-key-selection", "lossy": True},
+        "trust": classify_untrusted_text(
+            json.dumps(reduced, ensure_ascii=False, separators=(",", ":"), default=str),
+            source=f"agent-handoff:{from_role}",
+        ),
     }
     if budget is not None:
         body["budget"] = budget
+    if filter_summary is not None:
+        body["filter_summary"] = filter_summary
     return body
 
 
 def _select_to_budget(reduced: dict[str, Any], *, from_role: str, to_role: str, task: str,
                       artifact_id: str | None, source_hash: str, source_tokens: int,
-                      token_budget: int, preserve_fields: Iterable[str]) -> tuple[dict[str, Any], dict[str, Any]]:
+                      token_budget: int, preserve_fields: Iterable[str],
+                      tokenizer: str, tokenizer_model: str | None,
+                      filter_summary: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     preserve = [f for f in preserve_fields if f in reduced]
     priority = list(dict.fromkeys([*preserve, *DEFAULT_FIELD_PRIORITY, *reduced.keys()]))
     selected: dict[str, Any] = {}
     dropped: list[str] = []
 
+    estimator = get_tokenizer(tokenizer, model=tokenizer_model)
     budget_meta = {
         "target_estimated_tokens": token_budget,
         "estimated_tokens": 0,
         "overflow": False,
         "dropped_keys": dropped,
         "preserved_fields": preserve,
+        "tokenizer": estimator.name,
+        "tokenizer_exact": bool(estimator.exact),
+        "tokenizer_model": tokenizer_model,
     }
 
     for field in priority:
@@ -97,8 +113,9 @@ def _select_to_budget(reduced: dict[str, Any], *, from_role: str, to_role: str, 
             source_tokens=source_tokens,
             reduced=candidate,
             budget=budget_meta,
+            filter_summary=filter_summary,
         )
-        estimated = _estimated_tokens(candidate_body)
+        estimated = _estimated_tokens(candidate_body, tokenizer=tokenizer, tokenizer_model=tokenizer_model)
         if estimated <= token_budget or field in preserve:
             selected[field] = reduced[field]
             if estimated > token_budget and field in preserve:
@@ -115,8 +132,9 @@ def _select_to_budget(reduced: dict[str, Any], *, from_role: str, to_role: str, 
         source_tokens=source_tokens,
         reduced=selected,
         budget=budget_meta,
+        filter_summary=filter_summary,
     )
-    budget_meta["estimated_tokens"] = _estimated_tokens(final_body)
+    budget_meta["estimated_tokens"] = _estimated_tokens(final_body, tokenizer=tokenizer, tokenizer_model=tokenizer_model)
     if budget_meta["estimated_tokens"] > token_budget:
         budget_meta["overflow"] = True
         budget_meta["overflow_reason"] = "preserved fields or fixed metadata exceed target"
@@ -126,28 +144,49 @@ def _select_to_budget(reduced: dict[str, Any], *, from_role: str, to_role: str, 
 def reduce_handoff(payload: Any, *, from_role: str, to_role: str, task: str = "",
                    artifact_id: str | None = None, max_items: int = 12, max_chars: int = 1600,
                    token_budget: int | None = None,
-                   preserve_fields: Iterable[str] = ("summary", "tests", "risks", "open_questions")) -> dict[str, Any]:
+                   preserve_fields: Iterable[str] = ("summary", "tests", "risks", "open_questions"),
+                   tokenizer: str = "native", tokenizer_model: str | None = None) -> dict[str, Any]:
     encoded = (
         json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
         if not isinstance(payload, str)
         else payload.encode("utf-8")
     )
-    source_tokens = estimate_tokens_from_bytes(len(encoded))
+    source_tokens = count_tokens(encoded.decode("utf-8", errors="replace"), tokenizer=tokenizer, model=tokenizer_model)
     source_hash = hashlib.sha256(encoded).hexdigest()
     reduced: dict[str, Any] = {}
+    dedup_lists_seen = 0
+    dedup_items_removed = 0
+
+    def dedup_then_bound(value: Any, *, deduplicate: bool = False, item_limit: int = max_items, char_limit: int = max_chars) -> Any:
+        nonlocal dedup_lists_seen, dedup_items_removed
+        deduped = value
+        if deduplicate and isinstance(value, list):
+            dedup_lists_seen += 1
+            deduped, removed = deduplicate_exact_list(value)
+            dedup_items_removed += int(removed)
+        return _bounded(deduped, max_items=item_limit, max_chars=char_limit)
 
     if isinstance(payload, dict):
         lowered = {str(k).lower(): v for k, v in payload.items()}
         for canonical, aliases in KEY_ALIASES.items():
             for alias in aliases:
                 if alias in lowered:
-                    reduced[canonical] = _bounded(lowered[alias], max_items=max_items, max_chars=max_chars)
+                    reduced[canonical] = dedup_then_bound(lowered[alias], deduplicate=canonical in HANDOFF_SET_LIKE_FIELDS)
                     break
     else:
         reduced["summary"] = _bounded(str(payload), max_items=max_items, max_chars=max_chars)
 
     if not reduced.get("summary") and isinstance(payload, dict):
-        reduced["summary"] = _bounded(payload, max_items=min(6, max_items), max_chars=min(600, max_chars))
+        reduced["summary"] = dedup_then_bound(payload, item_limit=min(6, max_items), char_limit=min(600, max_chars))
+
+    filter_summary = {
+        "schema": "repo-context-filter-summary/v1",
+        "classification": "deterministic-handoff-filter-summary",
+        "exact_duplicate_list_items_removed": dedup_items_removed,
+        "lists_scanned": dedup_lists_seen,
+        "merge_authority": "exact-json-equality-on-set-like-top-level-fields-only",
+        "nested_sequences_preserved": True,
+    }
 
     budget_meta = None
     if token_budget is not None:
@@ -163,6 +202,9 @@ def reduce_handoff(payload: Any, *, from_role: str, to_role: str, task: str = ""
             source_tokens=source_tokens,
             token_budget=token_budget,
             preserve_fields=preserve_fields,
+            tokenizer=tokenizer,
+            tokenizer_model=tokenizer_model,
+            filter_summary=filter_summary,
         )
 
     body = _build_body(
@@ -174,8 +216,11 @@ def reduce_handoff(payload: Any, *, from_role: str, to_role: str, task: str = ""
         source_tokens=source_tokens,
         reduced=reduced,
         budget=budget_meta,
+        filter_summary=filter_summary,
     )
-    body["estimated_tokens"] = _estimated_tokens(body)
+    estimator = get_tokenizer(tokenizer, model=tokenizer_model)
+    body["estimated_tokens"] = _estimated_tokens(body, tokenizer=tokenizer, tokenizer_model=tokenizer_model)
+    body["tokenizer"] = {"name": estimator.name, "exact": bool(estimator.exact), "model": tokenizer_model}
     body["estimated_reduction_ratio"] = round(1 - (body["estimated_tokens"] / max(1, source_tokens)), 4)
     if budget_meta is not None:
         body["budget"]["estimated_tokens"] = body["estimated_tokens"]

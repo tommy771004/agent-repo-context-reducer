@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repo Context Git Provenance",
+  "type": "object",
+  "required": ["classification", "git_available"],
+  "properties": {
+    "classification": {"type": "string"},
+    "git_available": {"type": "boolean"},
+    "path": {"type": ["string", "null"]},
+    "commit": {"type": ["string", "null"]},
+    "head_blob_sha": {"type": ["string", "null"]},
+    "index_blob_sha": {"type": ["string", "null"]},
+    "working_blob_sha": {"type": ["string", "null"]},
+    "dirty": {"type": ["boolean", "null"]},
+    "content_identity": {
+      "type": ["object", "null"],
+      "properties": {
+        "commit": {"type": ["string", "null"]},
+        "path": {"type": ["string", "null"]},
+        "blob_sha": {"type": ["string", "null"]},
+        "source": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

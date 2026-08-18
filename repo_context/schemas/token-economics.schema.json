@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-token-economics/v1",
+  "title": "Repo Context Token Economics",
+  "type": "object",
+  "required": [
+    "schema",
+    "baseline",
+    "observed_or_estimated_pipeline",
+    "token_amplification_ratio",
+    "net_token_savings",
+    "token_efficient"
+  ],
+  "properties": {
+    "schema": {
+      "const": "repo-context-token-economics/v1"
+    },
+    "baseline": {
+      "type": "object"
+    },
+    "observed_or_estimated_pipeline": {
+      "type": "object"
+    },
+    "token_amplification_ratio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "net_token_savings": {
+      "type": "integer"
+    },
+    "effective_token_savings_ratio": {
+      "type": "number"
+    },
+    "token_efficient": {
+      "type": "boolean"
+    },
+    "note": {
+      "type": "string"
+    },
+    "measurement": {
+      "type": "object",
+      "required": [
+        "comparison_quality",
+        "baseline_tokens_source",
+        "pipeline_input_tokens_source",
+        "pipeline_output_tokens_source",
+        "savings_claim_comparable",
+        "interpretation"
+      ],
+      "properties": {
+        "comparison_quality": {
+          "enum": [
+            "comparable-estimates",
+            "provider-reported",
+            "mixed-measurement"
+          ]
+        },
+        "baseline_tokens_source": {
+          "type": "string"
+        },
+        "pipeline_input_tokens_source": {
+          "type": "string"
+        },
+        "pipeline_output_tokens_source": {
+          "type": "string"
+        },
+        "tokenizer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tokenizer_exact": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "savings_claim_comparable": {
+          "type": "boolean"
+        },
+        "interpretation": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

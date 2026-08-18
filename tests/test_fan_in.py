@@ -18,7 +18,7 @@ class FanInTests(unittest.TestCase):
                 {"claim": "Payment update is asynchronous", "evidence": "order.py:20", "source": "order.py",
                  "confidence": 0.8, "canonicalKey": "payment|async"}
             ]},
-        ])
+        ], unstructured_canonical_policy="legacy-merge")
         self.assertEqual(result["stats"]["output_finding_count"], 1)
         self.assertEqual(result["stats"]["duplicate_count"], 1)
         self.assertEqual(result["findings"][0]["reducer"]["agreement_count"], 2)

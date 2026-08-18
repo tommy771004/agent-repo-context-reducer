@@ -142,6 +142,8 @@ def execute_context(args: argparse.Namespace) -> dict[str, Any]:
         max_symbols=args.max_symbols,
         include_content=not args.structure_only,
         external_blocks=blocks,
+        tokenizer=getattr(args, "tokenizer", "native"),
+        tokenizer_model=getattr(args, "tokenizer_model", None),
     )
     result["route"] = route
     result["run_id"] = run_id
