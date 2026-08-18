@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-recall-benchmark/v1",
+  "title": "Critical Evidence Recall Benchmark",
+  "type": "object",
+  "required": ["schema", "classification", "cases", "aggregate", "policy"],
+  "properties": {
+    "schema": {"const": "repo-context-recall-benchmark/v1"},
+    "classification": {"const": "deterministic-critical-evidence-recall-benchmark"},
+    "cases": {"type": "array", "items": {"type": "object"}},
+    "aggregate": {
+      "type": "object",
+      "required": ["critical_evidence_count", "initial_critical_evidence_recall", "final_critical_evidence_recall", "false_filter_rate", "model_calls_added_by_recall"],
+      "properties": {
+        "critical_evidence_count": {"type": "integer", "minimum": 0},
+        "initial_critical_evidence_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "final_critical_evidence_recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "false_filter_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "model_calls_added_by_recall": {"const": 0}
+      },
+      "additionalProperties": true
+    },
+    "policy": {"type": "string"}
+  },
+  "additionalProperties": true
+}

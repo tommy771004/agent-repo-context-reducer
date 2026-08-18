@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.4.0
+
+- Added deterministic Claim-Aware Verification Recall and `repo-context claim-recall`.
+- Added rule-derived verification requirements for responsive variants, actual runtime usage, localization leakage, accessibility, persistence, motion, and dependency references.
+- Added scoped negative-search observations so import-only/absence evidence can be represented without an extra LLM call.
+- Added explicit `challenged` / `provisionally-supported` / `inconclusive` states with `semantic_truth_claimed=false`.
+- Prevented missing scoped paths from silently falling back to repository-wide search.
+- Split responsive base-layout context from breakpoint counter-context so `bottom-0` alone cannot falsely count as a breakpoint contradiction.
+- Enforced one aggregate model-visible budget across rehydrated source evidence, verification observations, and policy metadata.
+- Added Claim Verification Recall Draft 2020-12 contract, bringing the schema total to 31.
+- Added UI partial-context trap regression/release-gate coverage modeled after real-world Settings UX analysis.
+
+## 2.3.0
+
+- Re-scoped the product core to `Reduce → Verify → Recall`; runtime/sandbox/multi-agent capabilities remain native but advisory/optional.
+- Added a repository-scoped `ContextEvidence` contract with deterministic revision/assertion/content verification states.
+- Added a HOT Context Store overlay while keeping the persistent repository index as the single WARM/Recallable locator source; no full source or duplicate WARM index is persisted.
+- Added deterministic repository recall with exact path/symbol ranking, bounded local `rg`/Python source search, dependency-neighbor hints and zero required model calls.
+- Added bounded rehydration: exact symbol spans for symbol hits and ±2-line snippets for module-level text hits.
+- Added stale HOT invalidation using Git blob identity when available and stat fingerprints otherwise.
+- Added index reconciliation so recreated evidence can clear missing tombstones and removed locators cannot remain HOT.
+- Added deterministic context-sufficiency signals that recommend recall without claiming semantic completeness.
+- Added Critical Evidence Recall benchmark metrics: initial/final recall, recall gain, false-filter rate, missed critical evidence and model calls added by recall.
+- Added four Draft 2020-12 contracts (Context Evidence, Context Store, Recall Result, Recall Benchmark), bringing the bundled total to 30.
+- Expanded release gates and regression coverage for exact/error/module-level recall, hard recall budgets, no repeated HOT recall, stale/missing recovery and local-state maintenance.
+
 ## 2.2.0
 
 - Added the Unified Filter & Dedup Engine across external context, context packs, handoffs, fan-in, synthesis, and runtime grading/finalization.

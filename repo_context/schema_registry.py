@@ -31,6 +31,11 @@ SCHEMA_IDS = {
     "token-economics": "repo-context-token-economics/v1",
     "adaptive-reduction": "repo-context-adaptive-reduction/v1",
     "reduction-simulation": "repo-context-reduction-simulation/v1",
+    "context-evidence": "repo-context-context-evidence/v1",
+    "context-store": "repo-context-context-store/v1",
+    "recall-result": "repo-context-recall-result/v1",
+    "recall-benchmark": "repo-context-recall-benchmark/v1",
+    "claim-verification-recall": "repo-context-claim-verification-recall/v1",
 }
 
 _SCHEMA_FILES = {name: f"{name}.schema.json" for name in SCHEMA_IDS}
@@ -210,6 +215,45 @@ def validate_contract(name: str, payload: Any) -> dict[str, Any]:
         if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
         if payload.get("selected_mode") not in {"direct", "light", "full"}: errors.append("invalid selected_mode")
         if not isinstance(payload.get("eligibility"), dict): errors.append("eligibility must be an object")
+    elif name == "context-evidence":
+        if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
+        if payload.get("classification") != "repository-context-evidence": errors.append("classification mismatch")
+        if not _is_nonempty_string(payload.get("id")): errors.append("id must be a non-empty string")
+        if not _is_nonempty_string(payload.get("path")): errors.append("path must be a non-empty string")
+        if payload.get("tier") not in {"active", "recallable", "rejected"}: errors.append("invalid tier")
+        if payload.get("validity") not in {"current", "stale", "missing"}: errors.append("invalid validity")
+        if not isinstance(payload.get("revision"), dict): errors.append("revision must be an object")
+    elif name == "context-store":
+        if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
+        if payload.get("version") != 2: errors.append("version must be 2")
+        if not _is_nonempty_string(payload.get("session")): errors.append("session must be a non-empty string")
+        if not isinstance(payload.get("items"), dict): errors.append("items must be an object")
+        if not isinstance(payload.get("index_summary"), dict): errors.append("index_summary must be an object")
+        if not isinstance(payload.get("invalidations"), list): errors.append("invalidations must be an array")
+    elif name == "recall-result":
+        if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
+        if payload.get("classification") != "deterministic-repository-context-recall": errors.append("classification mismatch")
+        if not _is_nonempty_string(payload.get("query")): errors.append("query must be a non-empty string")
+        if not isinstance(payload.get("model_payload"), dict): errors.append("model_payload must be an object")
+        if not isinstance(payload.get("sidecar"), dict): errors.append("sidecar must be an object")
+        metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+        if metrics.get("model_calls_added") != 0: errors.append("recall must not add model calls")
+    elif name == "recall-benchmark":
+        if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
+        if payload.get("classification") != "deterministic-critical-evidence-recall-benchmark": errors.append("classification mismatch")
+        if not isinstance(payload.get("cases"), list): errors.append("cases must be an array")
+        aggregate = payload.get("aggregate") if isinstance(payload.get("aggregate"), dict) else {}
+        if aggregate.get("model_calls_added_by_recall") != 0: errors.append("recall benchmark must report zero model calls")
+    elif name == "claim-verification-recall":
+        if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
+        if payload.get("classification") != "deterministic-claim-aware-verification-recall": errors.append("classification mismatch")
+        if not _is_nonempty_string(payload.get("claim")): errors.append("claim must be a non-empty string")
+        verification = payload.get("verification") if isinstance(payload.get("verification"), dict) else {}
+        if verification.get("semantic_truth_claimed") is not False: errors.append("claim recall must not claim semantic truth")
+        if verification.get("status") not in {"challenged", "provisionally-supported", "inconclusive"}: errors.append("invalid verification status")
+        if not isinstance(payload.get("model_payload"), dict): errors.append("model_payload must be an object")
+        metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+        if metrics.get("model_calls_added") != 0 or metrics.get("recall_model_calls_added") != 0: errors.append("claim recall must not add model calls")
     elif name == "reduction-simulation":
         if payload.get("schema") not in {None, SCHEMA_IDS[name]}: errors.append("schema id mismatch")
         if payload.get("recommended_policy") != "adaptive": errors.append("recommended_policy must be adaptive")

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-repo-context-reducer"
-version = "2.2.0"
-description = "Provider-aware repository context reducer with unified dedup, thin model/control planes, adaptive token economics, sandbox-aware durable runtime execution, and deterministic verification for AI coding agents"
+version = "2.4.0"
+description = "Deterministic-first repository context reduction, verification, and recall for coding agents with an optional bounded runtime harness"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

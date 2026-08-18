@@ -16,10 +16,16 @@ from repo_context.adaptive_reduction import choose_reduction_mode
 from repo_context.fan_in import reduce_worker_outputs
 from repo_context.filter_audit import audit_filter_reduction
 from repo_context.model_context import split_model_context, project_verification_context
+from repo_context.context_planner import build_context
+from repo_context.context_store import build_repository_context_store, invalidate_stale_context, iter_index_evidence
+from repo_context.recall import recall_repository_context
+from repo_context.claim_verification import claim_aware_verification_recall
+from repo_context.recall_benchmark import benchmark_context_recall
 from repo_context.model_packet import split_model_packet
 from repo_context.runtime_adapters import CallableRuntimeAdapter, register_runtime_adapter, unregister_runtime_adapter
 from repo_context.runtime_engine import execute_runtime
 from repo_context.scenario_simulation import simulate_scenarios
+from repo_context.scanner import build_index
 from repo_context.schema_registry import list_schemas, load_schema, validate_contract
 from repo_context.synthesis_packet import build_synthesis_packet
 from repo_context.token_economics import summarize_token_economics
@@ -32,11 +38,11 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> int:
     checks: dict[str, Any] = {"version": __version__}
-    require(__version__ == "2.2.0", f"expected 2.2.0, got {__version__}")
+    require(__version__ == "2.4.0", f"expected 2.4.0, got {__version__}")
 
     schemas = list_schemas()
     checks["schema_count"] = len(schemas)
-    require(len(schemas) == 26, f"expected 26 schemas, got {len(schemas)}")
+    require(len(schemas) == 31, f"expected 31 schemas, got {len(schemas)}")
 
     jsonschema_status = "not-installed"
     draft_validator = None
@@ -84,6 +90,114 @@ def main() -> int:
     require(model_context["metrics"]["model_context_tokens"] < model_context["metrics"]["rich_context_tokens"], "model context did not get thinner")
     verification = project_verification_context(rich_context, {"sources": {"S1": "b.py"}}, max_tokens=2000)
     require({x["path"] for x in verification["model_payload"]["files"]} == {"b.py"}, "grader verification context was not source-targeted")
+
+    # v2.3 context-safety / recall gate: WARM stays in the persistent index,
+    # only HOT overlay is persisted, recall adds zero model calls, and stale HOT
+    # evidence cannot survive a repository revision change.
+    with tempfile.TemporaryDirectory() as td:
+        repo = pathlib.Path(td)
+        (repo / "app.py").write_text("def unrelated():\n    return 1\n", encoding="utf-8")
+        (repo / "payment.py").write_text(
+            "PAYMENT_PROVIDER_UNAVAILABLE = 'provider unavailable'\n\n"
+            "def retry_payment():\n    return PAYMENT_PROVIDER_UNAVAILABLE\n",
+            encoding="utf-8",
+        )
+        idx = build_index(repo)
+        initial = build_context(idx, "unrelated", budget=600, max_files=1, max_symbols=1, session="release")
+        store = build_repository_context_store(idx, initial, session="release", persist=False)
+        require(store.stats()["warm_locators_duplicated"] is False, "context store duplicated WARM repository index")
+        require(store.stats()["full_source_persisted"] is False, "context store persisted full source")
+        require(len(store.data["items"]) < store.data["index_summary"]["locator_count"], "HOT overlay unexpectedly mirrors full index")
+        validate_normative("context-store", store.data)
+        first_locator = next(iter(iter_index_evidence(idx)))
+        validate_normative("context-evidence", first_locator)
+
+        recalled = recall_repository_context(idx, "retry_payment", store=store, budget=400, top_k=2, persist=False)
+        require(recalled["metrics"]["model_calls_added"] == 0, "repository recall added a model call")
+        require(any(x.get("symbol") == "retry_payment" for x in recalled["model_payload"]["evidence"]), "critical symbol was not rehydrated")
+        require(recalled["metrics"]["model_visible_tokens"] <= 400, "recall exceeded hard model-visible budget")
+        validate_normative("recall-result", recalled)
+
+        bench = benchmark_context_recall(idx, [{
+            "name": "hidden-payment-retry", "task": "unrelated", "query": "retry_payment",
+            "critical_evidence": [{"path": "payment.py", "symbol": "retry_payment"}],
+            "initial_budget": 600, "max_files": 1, "max_symbols": 1,
+        }], recall_budget=400)
+        require(bench["aggregate"]["final_critical_evidence_recall"] == 1.0, "critical evidence recall benchmark missed gold evidence")
+        require(bench["aggregate"]["model_calls_added_by_recall"] == 0, "recall benchmark introduced model calls")
+        validate_normative("recall-benchmark", bench)
+
+        # Mutate after hydration; the HOT record must be invalidated rather than
+        # silently reused against a new source revision.
+        (repo / "payment.py").write_text(
+            "PAYMENT_PROVIDER_UNAVAILABLE = 'provider unavailable'\n\n"
+            "def retry_payment():\n    return 'new revision'\n",
+            encoding="utf-8",
+        )
+        stale = invalidate_stale_context(store, persist=False)
+        require(stale["stale_items"] >= 1, "changed HOT repository evidence was not invalidated")
+
+        checks["context_safety_recall"] = {
+            "warm_locators_duplicated": False,
+            "full_source_persisted": False,
+            "recall_model_calls_added": recalled["metrics"]["model_calls_added"],
+            "recall_tokens": recalled["metrics"]["model_visible_tokens"],
+            "critical_evidence_final_recall": bench["aggregate"]["final_critical_evidence_recall"],
+            "false_filter_rate": bench["aggregate"]["false_filter_rate"],
+            "stale_items_invalidated": stale["stale_items"],
+        }
+
+    # v2.4 claim-aware verification recall: partial local evidence must trigger
+    # bounded counter/negative evidence checks without turning the deterministic
+    # layer into a semantic truth oracle or adding a model call.
+    with tempfile.TemporaryDirectory() as td:
+        repo = pathlib.Path(td)
+        (repo / "SettingsPanel.tsx").write_text(
+            "import { getModalMotion } from './motionTokens';\n"
+            "import { useTranslation } from 'react-i18next';\n"
+            "export function SettingsPanel(){ const {t}=useTranslation(); "
+            "return <div className=\"fixed bottom-0 md:inset-0 md:m-auto md:max-w-2xl\">"
+            "<span>{t('profile')}</span><span>安全性</span></div>; }\n",
+            encoding="utf-8",
+        )
+        (repo / "motionTokens.ts").write_text(
+            "export function getModalMotion(reduced=false){ return reduced ? {opacity:1} : {y:0}; }\n",
+            encoding="utf-8",
+        )
+        idx = build_index(repo)
+
+        responsive = claim_aware_verification_recall(
+            idx, {"text":"SettingsPanel is a bottom sheet on desktop", "path":"SettingsPanel.tsx"},
+            budget=500, persist=False,
+        )
+        require(responsive["metrics"]["model_calls_added"] == 0, "claim verification recall added a model call")
+        require(responsive["verification"]["counter_context_signals"] >= 1, "responsive counter-context was not detected")
+        require(any("md:inset-0" in str(x.get("content") or "") for x in responsive["model_payload"]["evidence"]), "responsive breakpoint evidence was not rehydrated")
+        require(responsive["verification"]["semantic_truth_claimed"] is False, "deterministic claim recall asserted semantic truth")
+        require(responsive["metrics"]["model_visible_tokens"] <= 500, "claim recall exceeded aggregate model-visible budget")
+        require(validate_contract("claim-verification-recall", responsive)["valid"], "claim verification contract failed")
+        validate_normative("claim-verification-recall", responsive)
+
+        usage = claim_aware_verification_recall(
+            idx, {"text":"`SettingsPanel.tsx` uses getModalMotion", "path":"SettingsPanel.tsx"},
+            budget=500, persist=False,
+        )
+        usage_obs = [x for x in usage["model_payload"]["observations"] if x.get("kind") == "runtime-usage"]
+        require(usage_obs and usage_obs[0]["status"] == "challenge-signal" and usage_obs[0]["match_count"] == 0, "import-only helper was mistaken for runtime usage")
+
+        localized = claim_aware_verification_recall(
+            idx, {"text":"SettingsPanel is fully localized", "path":"SettingsPanel.tsx"},
+            budget=500, persist=False,
+        )
+        require(localized["verification"]["challenge_signals"] >= 1, "hard-coded visible copy did not challenge localization claim")
+        checks["claim_verification_recall"] = {
+            "responsive_counter_context": responsive["verification"]["counter_context_signals"],
+            "import_only_usage_challenged": usage["verification"]["status"] == "challenged",
+            "localization_challenge_signals": localized["verification"]["challenge_signals"],
+            "model_calls_added": responsive["metrics"]["model_calls_added"],
+            "semantic_truth_claimed": responsive["verification"]["semantic_truth_claimed"],
+            "model_visible_tokens": responsive["metrics"]["model_visible_tokens"],
+        }
 
     routes = {
         "low": choose_reduction_mode("bounded change", source_tokens=12000, complexity={"level": "focused"}, risk={"level": "low"})["selected_mode"],

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "hidden-payment-charge",
+    "task": "inspect formatCurrency",
+    "query": "charge",
+    "critical_evidence": [
+      {"path": "src/services/payment.js", "symbol": "charge"}
+    ],
+    "initial_budget": 700,
+    "recall_budget": 500,
+    "max_files": 1,
+    "max_symbols": 1
+  },
+  {
+    "name": "hidden-checkout-route",
+    "task": "inspect formatCurrency",
+    "query": "checkout",
+    "critical_evidence": [
+      {"path": "src/routes/order.js", "symbol": "checkout"}
+    ],
+    "initial_budget": 700,
+    "recall_budget": 500,
+    "max_files": 1,
+    "max_symbols": 1
+  },
+  {
+    "name": "exact-payment-file",
+    "task": "inspect formatCurrency",
+    "query": "src/services/payment.js",
+    "critical_evidence": [
+      {"path": "src/services/payment.js"}
+    ],
+    "initial_budget": 700,
+    "recall_budget": 500,
+    "max_files": 1,
+    "max_symbols": 1
+  }
+]

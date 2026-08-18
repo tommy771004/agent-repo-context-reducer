@@ -18,6 +18,10 @@ from .filter_audit import audit_filter_reduction
 from .model_packet import split_model_packet
 from .adaptive_reduction import choose_reduction_mode
 from .scenario_simulation import simulate_scenarios
+from .context_store import RepositoryContextStore, build_repository_context_store, invalidate_stale_context
+from .recall import recall_repository_context
+from .claim_verification import claim_aware_verification_recall
+from .recall_benchmark import benchmark_context_recall
 from .synthesis_packet import build_synthesis_packet
 from .streaming import iter_worker_input
 from .tokenizer import tokenizer_status, token_estimate
@@ -204,6 +208,31 @@ def main(argv:list[str]|None=None)->int:
                 if not isinstance(payload,list): raise ValueError('simulate-reduction input must be a JSON array')
                 scenarios=[row for row in payload if isinstance(row,dict)]
             result=simulate_scenarios(scenarios)
+        elif args.command=='recall':
+            idx=ensure_index(args.repo,sync=not args.no_sync,use_cache=True)["index"]
+            result=recall_repository_context(idx,args.query,session=args.session,budget=args.budget,top_k=args.top_k,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
+        elif args.command=='claim-recall':
+            idx=ensure_index(args.repo,sync=not args.no_sync,use_cache=True)["index"]
+            claim={"text":args.claim}
+            if args.path: claim["path"]=args.path
+            if args.symbol: claim["symbol"]=args.symbol
+            result=claim_aware_verification_recall(idx,claim,session=args.session,budget=args.budget,top_k=args.top_k,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
+        elif args.command=='context-store':
+            root=pathlib.Path(args.repo).resolve()
+            store=RepositoryContextStore(root,args.session)
+            if args.action=='status':
+                result={"store":store.stats(),"path":str(store.path),"items":store.items()}
+            elif args.action=='invalidate':
+                result={"store":store.stats(),"invalidation":invalidate_stale_context(store),"path":str(store.path)}
+            else:
+                idx=ensure_index(args.repo,sync=not args.no_sync,use_cache=True)["index"]
+                store=build_repository_context_store(idx,None,session=args.session,persist=True)
+                result={"store":store.stats(),"path":str(store.path)}
+        elif args.command=='recall-benchmark':
+            payload=_load_user_payload(args.cases_json)
+            if not isinstance(payload,list): raise ValueError('recall-benchmark input must be a JSON array')
+            idx=ensure_index(args.repo,sync=not args.no_sync,use_cache=True)["index"]
+            result=benchmark_context_recall(idx,[row for row in payload if isinstance(row,dict)],initial_budget=args.initial_budget,recall_budget=args.recall_budget,tokenizer=args.tokenizer,tokenizer_model=args.tokenizer_model)
         elif args.command=='tokenizer':
             if args.action=='status': result={'tokenizers':tokenizer_status()}
             else:

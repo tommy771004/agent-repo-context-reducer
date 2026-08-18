@@ -78,6 +78,8 @@ def split_model_context(
         "budget": context_pack.get("budget"),
         "notes": context_pack.get("notes"),
         "strategy": context_pack.get("strategy"),
+        "context_store": context_pack.get("context_store"),
+        "recall_policy": context_pack.get("recall_policy"),
         "file_metadata": file_meta,
         "symbol_metadata": symbol_meta,
         "external_metadata": external_meta,

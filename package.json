@@ -1,8 +1,8 @@
 {
   "name": "agent-repo-context-reducer-skill",
-  "version": "2.2.0",
+  "version": "2.4.0",
   "private": true,
-  "description": "Provider-aware repository context reducer and bounded agent runtime with unified dedup, thin model/control planes, adaptive token economics, sandboxing, durable runs, and deterministic verification.",
+  "description": "Deterministic-first repository context reduction, verification, and recall for coding agents; optional bounded multi-agent runtime harness.",
   "scripts": {
     "test": "python3 -m unittest discover -s tests -v",
     "demo": "python3 scripts/repo_context.py context examples/sample-project \"payment checkout order\" --budget 1800 --pretty",
@@ -24,6 +24,9 @@
     "filter:audit": "python3 scripts/repo_context.py filter-audit examples/filter-dedup/reduction.example.json --pretty",
     "simulate": "python3 scripts/repo_context.py simulate-reduction examples/reduction-scenarios.json --pretty",
     "release:gate": "python3 scripts/release_gate.py",
-    "runtime:auto": "python3 scripts/repo_context.py runtime execute \"fix typo\" --repo . --config examples/runtime/subprocess-runtime.json --allow-external-commands --no-context --reduction-mode auto --no-checkpoint --pretty"
+    "runtime:auto": "python3 scripts/repo_context.py runtime execute \"fix typo\" --repo . --config examples/runtime/subprocess-runtime.json --allow-external-commands --no-context --reduction-mode auto --no-checkpoint --pretty",
+    "recall": "python3 scripts/repo_context.py recall charge --repo examples/sample-project --budget 1200 --pretty",
+    "claim:recall": "python3 scripts/repo_context.py claim-recall \"payment retry uses queue.publish\" --repo examples/sample-project --budget 1200 --pretty",
+    "recall:benchmark": "python3 scripts/repo_context.py recall-benchmark examples/recall-benchmark.json --repo examples/sample-project --pretty"
   }
 }

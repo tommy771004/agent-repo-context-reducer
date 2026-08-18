@@ -1,38 +1,70 @@
 # Agent Repo Context Reducer
 
-**先縮減，再讀取；Final Agent 前再縮減一次。** 為 AI Coding Agent 提供 dependency-free、Provider-aware 的 Repository Context Runtime。
+**縮減 → 驗證 → 召回（Reduce → Verify → Recall）。** 為 AI Coding Agent 提供 dependency-free、deterministic-first 的 Repository Context 縮減與恢復層。
 
-版本：**2.2.0**　Python：**3.10+**　核心 Runtime dependencies：**0**
+版本：**2.4.0**　Python：**3.10+**　核心 Runtime dependencies：**0**
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
 ## 專案定位
 
-大型 Coding Agent 常在兩個地方浪費 Context：
-
-1. 還不知道什麼重要，就先讀太多 Repository 原始碼；
-2. 平行 Worker 的原始輸出全部塞給 Final Model，讓昂貴模型重新做 validation、dedup、conflict detection。
-
-本專案把這兩個邊界都放到 deterministic code 中先處理。
+Coding Agent 不應把整個 Repository、完整 provenance 或所有歷史 evidence 都付成 model token；但縮減也不能等同刪除。v2.4 延續同一個核心問題：**模型現在必須讀哪些 Repository Context，哪些可以先留在本機、需要時再找回？**
 
 ```text
-User Task
-  -> Route / Risk / Complexity
-  -> Repository Index + Graph + Symbols
-  -> Task Ranking + VoI + Context Budget
-  -> Bounded Repository Context
-  -> Lane-sliced Worker Context
-  -> Runtime Adapter / Parallel Execution
-  -> Reduced Handoffs + set-like exact dedup
-  -> Unified Filter Pipeline
-  -> Streaming Fan-In + unique-worker agreement
-  -> Candidate Detection（選用，只能提候選）
-  -> Pair Verifier + Component Ambiguity Guard
-  -> Contradiction-preserving / cross-section-dedup Synthesis Packet
-  -> Grader Quality Gate
-  -> Integrator / Final Answer
-  -> Telemetry + Final-answer Invariants
+Repository
+  -> Persistent Index / Graph / Symbols             [WARM：本機，不花 Model Token]
+  -> Rank + Filter + Verify + Context Budget
+  -> HOT Active Context                             [Model-visible]
+  -> Thin Model Context
+  -> Agent
+       │
+       ├─ Evidence 足夠 ───────────────────────────> 繼續
+       │
+       └─ Context Gap
+             -> Deterministic Recall
+             -> Exact locator / Local text / Graph
+             -> Bounded Symbol Span / Source Snippet
+             -> Rehydrate HOT
+             -> 繼續
+
+Optional Harness：Direct / Light / Full Runtime、Fan-In、Grader、Sandbox、Durable Run。
 ```
+
+Repository Index 是唯一的 WARM / Recallable locator source。Context Store **不複製整份 Index，也不保存完整 Source**；只保存目前 HOT overlay、bounded rejected tombstone 與 invalidation history。Runtime/Multi-Agent 仍保留，但不再主導 Core。
+
+## v2.4 重點：Claim-Aware Verification Recall
+
+- **針對 provisional claim 做驗證式召回**：新增 `repo-context claim-recall`，先推導要確認或反駁該 claim 所需的 Repository evidence，再決定是否需要補 Context。
+- **不是只找相關資料，而是找可驗證資料**：針對 responsive/breakpoint、import≠實際呼叫、localization、accessibility、persistence、motion、dependency 等常見 Coding/UI claim 產生 deterministic verification requirements。
+- **Recall 本身 0 model call**：requirements、scoped source search、negative-search observation、ranking、rehydration 全部由程式執行。
+- **允許不知道**：只輸出 `challenged`、`provisionally-supported`、`inconclusive`，並固定 `semantic_truth_claimed=false`；regex/search 不會被包裝成語意真相。
+- **負證據也能被壓縮表示**：例如檔案有 import、但 scoped search 找不到實際 invocation，可回傳 compact negative observation，不必把整檔交給模型。
+- **找不到指定 path 不會偷改成全 Repo 搜尋**，避免 unrelated evidence 造成錯誤對齊。
+- **Evidence + observations + policy 共用同一個 model-visible hard budget**。
+- Release Gate 加入真實 UI repository 類型的 partial-context traps；Schema 總數為 **31**。
+
+這個能力只在 claim 真的需要驗證時使用，不應每一輪、每一句固定執行。
+
+```bash
+repo-context claim-recall \
+  "`src/components/SettingsPanel.tsx` uses getModalMotion on desktop" \
+  --repo . --path src/components/SettingsPanel.tsx --budget 1200 --pretty
+```
+
+## v2.3 重點：Context Safety & Recall
+
+- **HOT / WARM 分離，但不建立第二份 Index**：`.repo-context/index.json` 是唯一 Recallable locator source；`.repo-context/context-stores/<session>.json` 只保存 active overlay 與 bounded safety state。
+- **Repository Recall 預設 0 次 Model Call**：先 exact path/symbol，再 bounded local source search 與 dependency-neighbor ranking；不需要額外 Memory Provider 或 LLM query rewrite。
+- **精準 Rehydrate**：Symbol 命中只讀該 source span；module-level 常數/錯誤字串只回命中行 ±2 行 snippet，不退化成整檔注入。
+- **Recall 有硬 Token Budget**：本機可以探索較多 candidate，但只有 bounded evidence 能 promotion 到 HOT。
+- **Stale Context Invalidation**：HOT evidence 綁 revision；有 Git 時優先 blob identity。來源變更或消失後不能靜默沿用舊 Context。
+- **Index Reconciliation**：檔案/符號重新出現時會解除 missing tombstone；refreshed index 已不存在的 logical locator 不能繼續留在 HOT。
+- **Repository-scoped `ContextEvidence` Contract**：只做 deterministic `proven-same / proven-different / revision-conflict / conflict / compatible / unknown`；semantic similarity 不能當 proof。
+- **Context Sufficiency Gate**：只根據可明確觀察的本機 signal 建議 Recall，不宣稱能證明語意完整。
+- **Critical Evidence Recall Benchmark**：正式量 initial/final recall、false-filter rate 與 Recall 新增的 model calls。
+- **架構減法**：Sandbox/Runtime/Multi-Agent 功能仍是 native，但不再列為 Core。Core 鎖定 `Reduce → Verify → Recall`。
+
+核心安全原則：**不送模型 ≠ 刪除資訊**。無法確定是否重要的 Repository Evidence 應留在 Recallable 層，而不是因 token optimization 永久丟棄。
 
 ## v2.2 重點：Unified Filter & Dedup Engine
 

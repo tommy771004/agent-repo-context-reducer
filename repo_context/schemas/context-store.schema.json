@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-context-store/v1",
+  "title": "Repository Context Store",
+  "type": "object",
+  "required": ["schema", "version", "session", "updated_at", "items", "index_summary", "invalidations"],
+  "properties": {
+    "schema": {"const": "repo-context-context-store/v1"},
+    "version": {"const": 2},
+    "session": {"type": "string", "minLength": 1},
+    "updated_at": {"type": "integer", "minimum": 0},
+    "items": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["schema", "id", "tier", "path"],
+        "properties": {
+          "schema": {"const": "repo-context-context-evidence/v1"},
+          "id": {"type": "string", "minLength": 1},
+          "tier": {"enum": ["active", "rejected"]},
+          "path": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "index_summary": {
+      "type": "object",
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 0},
+        "symbol_count": {"type": "integer", "minimum": 0},
+        "locator_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "invalidations": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": false
+}

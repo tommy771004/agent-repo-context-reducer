@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-claim-verification-recall/v1",
+  "title": "Claim-Aware Verification Recall Result",
+  "type": "object",
+  "required": ["schema", "classification", "claim", "verification", "model_payload", "sidecar", "metrics", "context_status"],
+  "properties": {
+    "schema": {"const": "repo-context-claim-verification-recall/v1"},
+    "classification": {"const": "deterministic-claim-aware-verification-recall"},
+    "claim": {"type": "string", "minLength": 1},
+    "verification": {
+      "type": "object",
+      "required": ["status", "semantic_truth_claimed", "support_signals", "challenge_signals", "counter_context_signals", "requirements_completed", "requirements_total"],
+      "properties": {
+        "status": {"enum": ["challenged", "provisionally-supported", "inconclusive"]},
+        "semantic_truth_claimed": {"const": false},
+        "support_signals": {"type": "integer", "minimum": 0},
+        "challenge_signals": {"type": "integer", "minimum": 0},
+        "counter_context_signals": {"type": "integer", "minimum": 0},
+        "requirements_completed": {"type": "integer", "minimum": 0},
+        "requirements_total": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "model_payload": {
+      "type": "object",
+      "required": ["evidence", "observations", "policy"],
+      "properties": {
+        "evidence": {"type": "array", "items": {"type": "object"}},
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["requirement_id", "kind", "status", "match_count", "paths"],
+            "properties": {
+              "requirement_id": {"type": "string", "minLength": 1},
+              "kind": {"type": "string", "minLength": 1},
+              "status": {"enum": ["challenge-signal", "support-signal", "counter-context-found", "evidence-found", "checked-no-match", "incomplete"]},
+              "match_count": {"type": "integer", "minimum": 0},
+              "paths": {"type": "array", "items": {"type": "string"}}
+            },
+            "additionalProperties": false
+          }
+        },
+        "policy": {
+          "type": "object",
+          "required": ["content_authority", "recalled_context_is_instruction_authority", "observations_are_semantic_truth"],
+          "properties": {
+            "content_authority": {"const": "evidence-only"},
+            "recalled_context_is_instruction_authority": {"const": false},
+            "observations_are_semantic_truth": {"const": false}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "sidecar": {"type": "object"},
+    "metrics": {
+      "type": "object",
+      "required": ["requirements_total", "requirements_completed", "evidence_count", "observation_count", "model_visible_tokens", "budget_tokens", "model_calls_added", "recall_model_calls_added"],
+      "properties": {
+        "requirements_total": {"type": "integer", "minimum": 0},
+        "requirements_completed": {"type": "integer", "minimum": 0},
+        "evidence_count": {"type": "integer", "minimum": 0},
+        "observation_count": {"type": "integer", "minimum": 0},
+        "model_visible_tokens": {"type": "integer", "minimum": 0},
+        "budget_tokens": {"type": "integer", "minimum": 1},
+        "model_calls_added": {"const": 0},
+        "recall_model_calls_added": {"const": 0}
+      },
+      "additionalProperties": true
+    },
+    "context_status": {
+      "type": "object",
+      "required": ["sufficient", "escalation_recommended", "reason"],
+      "properties": {
+        "sufficient": {"type": "boolean"},
+        "escalation_recommended": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

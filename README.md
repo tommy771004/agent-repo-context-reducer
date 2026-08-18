@@ -1,38 +1,70 @@
 # Agent Repo Context Reducer
 
-**Reduce before reading. Reduce again before synthesis.** A dependency-free, provider-aware context runtime for AI coding agents.
+**Reduce → Verify → Recall.** A dependency-free, deterministic-first repository context reduction and recovery layer for AI coding agents.
 
-Version **2.2.0** · Python **3.10+** · core runtime dependencies **0**
+Version **2.4.0** · Python **3.10+** · core runtime dependencies **0**
 
 [English](README.md) · [繁體中文](README.zh-TW.md)
 
 ## What it solves
 
-Large coding-agent systems waste context at two boundaries:
-
-1. the agent reads too much repository source before it knows what matters;
-2. parallel workers dump raw outputs into the final model and make it repeat validation, deduplication and conflict detection.
-
-This project reduces both boundaries with deterministic code before model reasoning.
+Coding agents need enough repository evidence to be correct, but should not pay model tokens for every file, provenance record, or previously-seen block. v2.4 keeps the core question narrow: **what repository context must the model read now, and what can remain locally recallable?**
 
 ```text
-User task
-  -> route / risk / complexity
-  -> repository index + graph + symbols
-  -> task ranking + VoI + context budget
-  -> bounded repository context
-  -> lane-sliced worker context
-  -> runtime adapter / parallel execution
-  -> reduced handoffs + set-like exact dedup
-  -> unified filter pipeline
-  -> streaming fan-in + unique-worker agreement
-  -> candidate detection (optional, candidate-only)
-  -> pair verification + component ambiguity guard
-  -> contradiction-preserving / cross-section-dedup synthesis packet
-  -> grader quality gate
-  -> integrator / final answer
-  -> telemetry + deterministic final-answer invariants
+Repository
+  -> persistent index / graph / symbols            [WARM: local, no model tokens]
+  -> rank + filter + verify + context budget
+  -> HOT active context                            [model-visible]
+  -> model context projection
+  -> Agent
+       |
+       +-- enough evidence -----------------------> continue
+       |
+       +-- context gap
+             -> deterministic recall
+             -> exact locator / local text / graph
+             -> bounded symbol span or source snippet
+             -> rehydrate HOT
+             -> continue
+
+Optional harness: Direct / Light / Full runtime, fan-in, grader, sandbox and durable runs.
 ```
+
+The repository index is the single WARM locator source. The Context Store does **not** copy the full index or source text: it persists only the current HOT overlay, bounded rejected tombstones and invalidation history. Runtime orchestration remains available, but it is advisory/optional rather than the product core.
+
+## v2.4 highlights — Claim-Aware Verification Recall
+
+- **Verification recall for provisional claims**: `repo-context claim-recall` derives bounded repository checks before a host promotes a local hypothesis into a final conclusion.
+- **Counter-evidence search, not just relevance search**: responsive/breakpoint, actual-call-vs-import, localization, accessibility, persistence, motion, and dependency cues can trigger scoped verification requirements.
+- **Zero required model calls**: requirement derivation, local source search, negative-search observations, candidate ranking, and bounded rehydration are deterministic.
+- **Abstention is explicit**: outputs are `challenged`, `provisionally-supported`, or `inconclusive`; the deterministic layer sets `semantic_truth_claimed=false` and never pretends regex/search coverage proves semantics.
+- **Scoped absence checks**: an import without an invocation can produce a compact negative observation; a missing requested path never falls back to unrelated repository-wide evidence.
+- **Aggregate budget enforcement**: source evidence + compact verification observations + policy must fit the claim-recall model-visible budget.
+- **Partial-context trap protection**: viewport-specific overrides, runtime usage, and hard-coded localization leaks are covered by release-gate fixtures modeled after real UI repository failures.
+- **One additional Draft 2020-12 contract**, bringing the package to **31 schemas**.
+
+Use this only when a claim needs verification. Do not run it for every sentence or turn: the reducer remains pull-based and cost-aware.
+
+```bash
+repo-context claim-recall \
+  "`src/components/SettingsPanel.tsx` uses getModalMotion on desktop" \
+  --repo . --path src/components/SettingsPanel.tsx --budget 1200 --pretty
+```
+
+## v2.3 highlights — Context Safety & Recall
+
+- **HOT / WARM separation without a second index**: `.repo-context/index.json` is the only recallable locator source; `.repo-context/context-stores/<session>.json` stores only the active overlay plus bounded safety state.
+- **Deterministic repository recall with zero required model calls**: exact path/symbol first, then bounded local source search and dependency-neighbor ranking. No external memory system or LLM query rewrite is required.
+- **Precise rehydration**: symbol matches hydrate only their source span; module-level text hits hydrate a small ±2-line snippet instead of the full file.
+- **Hard model-visible recall budget**: local candidate discovery can be broad, but only bounded evidence is promoted into HOT context.
+- **Stale context invalidation**: HOT evidence is revision-bound. Git blob identity is preferred when available; changed or missing evidence cannot remain silently active.
+- **Index reconciliation**: recreated files/symbols automatically clear missing tombstones; logical locators removed from a refreshed index cannot stay HOT.
+- **Repository-scoped `ContextEvidence` contract**: deterministic `proven-same`, `proven-different`, `revision-conflict`, `conflict`, `compatible`, or `unknown`; semantic similarity never becomes proof.
+- **Context sufficiency gate**: explicit local signals can recommend recall, but the gate does not pretend to prove semantic completeness.
+- **Critical Evidence Recall benchmark** measures initial vs final recall, false-filter rate and recall-added model calls.
+- **Scope reduction**: sandbox/runtime/multi-agent features remain native but are no longer Core capabilities. Core is `Reduce → Verify → Recall`.
+
+Core safety rule: **not model-visible does not mean deleted**. Ambiguous repository evidence stays recallable unless an explicit deterministic rejection rule applies.
 
 ## v2.2 highlights — Unified Filter & Dedup Engine
 

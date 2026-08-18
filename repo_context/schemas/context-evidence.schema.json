@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "repo-context-context-evidence/v1",
+  "title": "Repository Context Evidence",
+  "type": "object",
+  "required": ["schema", "classification", "id", "kind", "source", "path", "tier", "validity", "revision"],
+  "properties": {
+    "schema": {"const": "repo-context-context-evidence/v1"},
+    "classification": {"const": "repository-context-evidence"},
+    "id": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["file", "symbol", "external"]},
+    "source": {"type": "string", "minLength": 1},
+    "path": {"type": "string", "minLength": 1},
+    "symbol": {"type": "string"},
+    "start_line": {"type": "integer", "minimum": 1},
+    "end_line": {"type": "integer", "minimum": 1},
+    "tier": {"enum": ["active", "recallable", "rejected"]},
+    "validity": {"enum": ["current", "stale", "missing"]},
+    "revision": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "value": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "content_sha256": {"type": "string"},
+    "assertion": {"type": "object"}
+  },
+  "additionalProperties": true
+}

@@ -6,6 +6,8 @@ import pathlib
 from typing import Any
 
 from .context_planner import build_context
+from .context_store import RepositoryContextStore, build_repository_context_store, invalidate_stale_context
+from .context_safety import assess_context_sufficiency
 from .delegate import delegate_capability
 from .external_context import load_external_file
 from .index_runtime import persistent_index
@@ -133,6 +135,12 @@ def execute_context(args: argparse.Namespace) -> dict[str, Any]:
         index = persistent_index(args)
         native_index_used = True
 
+    stale_before_refresh = None
+    if native_index_used:
+        previous_store = RepositoryContextStore(root, args.session)
+        if previous_store.items():
+            stale_before_refresh = invalidate_stale_context(previous_store)
+
     result = build_context(
         index,
         args.task,
@@ -145,6 +153,23 @@ def execute_context(args: argparse.Namespace) -> dict[str, Any]:
         tokenizer=getattr(args, "tokenizer", "native"),
         tokenizer_model=getattr(args, "tokenizer_model", None),
     )
+    if native_index_used:
+        context_store = build_repository_context_store(index, result, session=args.session, persist=True)
+        result["context_store"] = {
+            **context_store.stats(),
+            "path": str(context_store.path),
+            "stale_invalidation_before_refresh": stale_before_refresh,
+            "policy": "Active context is model-eligible; Recallable context stores locators only and is rehydrated on demand; Rejected context cannot be promoted.",
+        }
+        result["recall_policy"] = {
+            "classification": "deterministic-repository-recall",
+            "model_calls_added": 0,
+            "trigger": "Recall only when context is insufficient, a symbol/path is unresolved, or stale evidence was invalidated.",
+        }
+    else:
+        result["context_store"] = None
+        result["recall_policy"] = {"classification":"external-only-context","model_calls_added":0}
+    result["context_status"] = assess_context_sufficiency(result)
     result["route"] = route
     result["run_id"] = run_id
     result["orchestration"] = plan_harness(

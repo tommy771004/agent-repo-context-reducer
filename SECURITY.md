@@ -69,3 +69,18 @@ Provider-reported token/cost metadata is treated as telemetry, not as proof of b
 - Pair-wise verified merges are additionally checked at component level to prevent transitive identity/assertion conflicts and ambiguous bridge attribution.
 - High-risk untrusted content can be kept, quarantined, or dropped by explicit policy; quarantined content does not enter synthesis.
 - Filter audit is an internal consistency gate, not a semantic-truth or security proof.
+## v2.3 context safety and recall boundary
+
+- Recall operates only on repository entries admitted to the local repository index; it does not contact a memory provider or an LLM.
+- Recalled repository text remains `evidence-only` and never gains instruction authority.
+- HOT evidence is revision-bound. Git blob identity is preferred when available; changed/missing evidence is invalidated before reuse.
+- The Context Store is an overlay, not an archive: it does not persist full source text or a duplicate WARM repository index.
+- Local source search is bounded. `rg` is invoked as argv (`shell=False`) when available; the fallback scans only index-admitted files with file/result caps.
+- A successful deterministic recall means relevant candidates were rehydrated under the configured rules; it is **not** proof that all semantically relevant evidence has been found. Low/no coverage is surfaced as an escalation signal rather than guessed away.
+- `ContextEvidence` verification authorizes only deterministic conclusions. `unknown` is a valid result and must not be coerced into a merge.
+
+
+
+## v2.4 claim-verification recall boundary
+
+Claim-aware verification recall remains a local deterministic retrieval feature. Repository text, regex matches, and negative-search observations remain evidence-only and never gain instruction authority. `challenged` and `provisionally-supported` are routing/evidence states, not semantic truth claims. Negative evidence is considered meaningful only for a bounded, complete scope; an unavailable requested scope must not silently broaden to the entire repository.

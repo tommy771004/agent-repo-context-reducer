@@ -1,89 +1,57 @@
 {
-  "project": "tommy771004/agent-repo-context-reducer",
-  "version": "2.2.0",
-  "assembled_date": "2026-08-18",
-  "release_status": "usable-release-gate-passed",
-  "validation": {
-    "unittest_discover": {
-      "tests_run": 216,
-      "passed": 216,
-      "failed": 0,
-      "errors": 0
-    },
-    "draft_2020_12_schemas": {
-      "count": 26,
-      "status": "passed",
-      "representative_payload_validation": "passed"
-    },
-    "release_gate": "passed",
-    "clean_wheel_install": {
-      "status": "passed",
-      "outside_source_tree": true
-    },
-    "installed_runtime_smoke": {
-      "direct": {
-        "success": true,
-        "model_calls": 1
-      },
-      "full_conflict": {
-        "success": true,
-        "model_calls": 4,
-        "peak_parallel": 2,
-        "filter_audit": true
-      }
-    }
+  "project": "agent-repo-context-reducer",
+  "version": "2.4.0",
+  "core": "Reduce -> Verify -> Recall",
+  "release_gate": "passed",
+  "tests": {
+    "passed": 258,
+    "failed": 0,
+    "errors": 0
   },
-  "scenario_simulation": {
-    "scenario_count": 7,
-    "static_total_tokens": {
-      "direct": 110262,
-      "light": 115847,
-      "full": 129201
+  "schemas": {
+    "count": 31,
+    "draft": "2020-12"
+  },
+  "v2_4": {
+    "feature": "Claim-Aware Verification Recall",
+    "capability": "context.claim-verification-recall",
+    "cli": "repo-context claim-recall",
+    "model_calls_added_by_recall": 0,
+    "semantic_truth_claimed": false,
+    "release_gate_fixture": {
+      "responsive_counter_context": 1,
+      "import_only_usage_challenged": true,
+      "localization_challenge_signals": 1,
+      "model_visible_tokens": 252
     },
-    "static_globally_eligible": {
-      "direct": false,
-      "light": false,
-      "full": true
+    "clean_install_smoke": {
+      "installed_version": "2.4.0",
+      "installed_schema_count": 31,
+      "claim_status": "challenged",
+      "challenge_signals": 2,
+      "counter_context_signals": 1,
+      "model_visible_tokens": 467,
+      "budget_tokens": 500,
+      "model_calls_added": 0,
+      "semantic_truth_claimed": false,
+      "legacy_recall_model_calls_added": 0
     },
-    "adaptive_total_tokens": 123936,
-    "adaptive_savings_vs_always_full_tokens": 5265,
-    "adaptive_savings_ratio_vs_always_full": 0.0408,
-    "selection_policy": "safety/correctness eligibility first, token economics second"
+    "limitations": [
+      "Rule-derived verification dimensions are intentionally finite.",
+      "Search hits and absence observations are evidence signals, not semantic proof.",
+      "Provider-billed token, latency, and USD savings require provider telemetry.",
+      "Claim recall is pull-based and should not run for every sentence or turn."
+    ]
   },
-  "model_plane_sample_native_estimator": {
-    "rich_repository_context_tokens": 11115,
-    "thin_model_context_tokens": 517,
-    "model_context_reduction_ratio": 0.9535,
-    "rich_synthesis_packet_tokens": 922,
-    "thin_model_packet_tokens": 93,
-    "model_packet_reduction_ratio": 0.8991,
-    "note": "Native estimator measurements; not provider billing tokens."
+  "v2_3_regression": {
+    "critical_evidence_final_recall_fixture": 1.0,
+    "false_filter_rate_fixture": 0.0,
+    "stale_invalidation": "passed",
+    "recall_model_calls_added": 0
   },
-  "dedup_sample": {
-    "workers": 8,
-    "raw_valid_findings": 16,
-    "output_findings": 1,
-    "duplicate_count": 15,
-    "max_agreement_count": 8,
-    "note": "Same-worker repetition does not inflate unique-worker agreement."
-  },
-  "v2_2_core": [
-    "unified filter and provenance-preserving dedup",
-    "control-plane/model-plane separation",
-    "thin model context and synthesis packet",
-    "source-targeted grader verification context",
-    "synthesis-only integrator repository context mode",
-    "adaptive direct/light/full reduction routing",
-    "end-to-end token economics with measurement provenance",
-    "multi-scenario simulation and release gate"
-  ],
-  "measurement_caveats": [
-    "Provider-reported token counts and estimator counts are never presented as directly comparable when sources differ.",
-    "Scenario simulation is a deterministic policy/overhead model, not a provider billing forecast or correctness predictor.",
-    "Deterministic local validation/filtering consumes CPU but no model tokens unless serialized into a model request."
-  ],
   "wheel": {
-    "path": "dist/agent_repo_context_reducer-2.2.0-py3-none-any.whl",
-    "sha256": "cce1eff5909eab13d14354eacdc0bf20e372002ebc3cffc8e700bf61c592e61d"
+    "path": "dist/agent_repo_context_reducer-2.4.0-py3-none-any.whl",
+    "sha256": "535f50213eeface0837869c6c34e09d5b45c028aaab8895681e4dc3ecd5c5b0b",
+    "size_bytes": 202470
   }
 }
