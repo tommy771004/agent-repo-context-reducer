@@ -10,6 +10,8 @@ Version **2.4.0** · Python **3.10+** · core runtime dependencies **0**
 
 Coding agents need enough repository evidence to be correct, but should not pay model tokens for every file, provenance record, or previously-seen block. v2.4 keeps the core question narrow: **what repository context must the model read now, and what can remain locally recallable?**
 
+For multi-problem tasks, every explicit problem is retained in a requirement ledger. Ranking controls scheduling, not whether a problem survives. Only repeated evidence with the same deterministic `context_id` is deduplicated: shared evidence is emitted once and referenced by later problems. If the HOT budget is too small, remaining problems are queued into later batches instead of being filtered out.
+
 ```text
 Repository
   -> persistent index / graph / symbols            [WARM: local, no model tokens]
@@ -432,5 +434,4 @@ repo-context filter-audit reduction.json --pretty
 ```
 
 Production defaults to `--unstructured-canonical-policy exact-claim`. Use `legacy-merge` only to reproduce the historical canonical grouping behavior; the audit surfaces ambiguous unstructured canonical groups as warnings.
-
 

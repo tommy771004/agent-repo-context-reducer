@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .problem_context import project_problem_context
 from .tokenizer import count_tokens
 
 SCHEMA = "repo-context-model-context/v1"
@@ -31,7 +32,7 @@ def split_model_context(
         if not isinstance(item, dict):
             continue
         files.append(_pick(item, (
-            "path", "language", "lines", "imports", "classes", "types", "functions",
+            "context_id", "path", "language", "lines", "imports", "classes", "types", "functions",
             "exports", "routes", "content", "content_mode",
         )))
         file_meta.append({
@@ -45,7 +46,7 @@ def split_model_context(
         if not isinstance(item, dict):
             continue
         symbols.append(_pick(item, (
-            "path", "name", "kind", "signature", "start_line", "end_line", "content", "content_mode",
+            "context_id", "path", "name", "kind", "signature", "start_line", "end_line", "content", "content_mode",
         )))
         symbol_meta.append({
             "index": index,
@@ -57,7 +58,7 @@ def split_model_context(
     for index, item in enumerate(context_pack.get("external_context") or []):
         if not isinstance(item, dict):
             continue
-        external.append(_pick(item, ("provider", "path", "url", "title", "content", "snippet", "content_mode")))
+        external.append(_pick(item, ("context_id", "provider", "path", "url", "title", "content", "snippet", "content_mode")))
         external_meta.append({
             "index": index,
             **_pick(item, ("fingerprint", "provenance", "trust", "support", "estimated_tokens", "context_id")),
@@ -68,8 +69,16 @@ def split_model_context(
         "files": files,
         "symbols": symbols,
         "external_context": external,
-        "policy": {"content_authority": "evidence-only"},
+        "policy": {
+            "content_authority": "evidence-only",
+            "problems_may_be_filtered": False,
+            "duplicate_context_may_be_removed": True,
+        },
     }
+    if isinstance(context_pack.get("problem_context"), dict):
+        model_payload["problem_context"] = project_problem_context(context_pack["problem_context"])
+    if isinstance(context_pack.get("context_status"), dict):
+        model_payload["context_status"] = context_pack["context_status"]
     sidecar = {
         "schema": SIDECAR_SCHEMA,
         "repository_provenance": context_pack.get("repository_provenance"),
@@ -80,6 +89,7 @@ def split_model_context(
         "strategy": context_pack.get("strategy"),
         "context_store": context_pack.get("context_store"),
         "recall_policy": context_pack.get("recall_policy"),
+        "problem_context": context_pack.get("problem_context"),
         "file_metadata": file_meta,
         "symbol_metadata": symbol_meta,
         "external_metadata": external_meta,

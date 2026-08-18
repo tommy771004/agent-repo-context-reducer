@@ -27,7 +27,7 @@ def rank_files(files: list[dict[str, Any]], graph: dict[str, Any], entry_points:
     from .graph import distances_from_entries
     distances=distances_from_entries(graph, entry_points); ranked=[]
     for f in files:
-        p=f["path"]; d=degree.get(p,{"in":0,"out":0}); static=float(f.get("static_importance",0)); centrality=math.log2(1+d.get("in",0))*7+math.log2(1+d.get("out",0))*3; entry_bonus=15.0 if f.get("entry_point") else 0.0; distance_bonus=max(0.0,8.0-distances[p]*1.5) if p in distances else 0.0; lexical=lexical_score(f,terms)+lexical_score(f,concept_terms)*0.35
+        p=f["path"]; d=degree.get(p,{"in":0,"out":0}); static=float(f.get("static_importance",0)); centrality=math.log2(1+d.get("in",0))*7+math.log2(1+d.get("out",0))*3; entry_bonus=15.0 if f.get("entry_point") else 0.0; distance_bonus=max(0.0,8.0-distances[p]*1.5) if p in distances else 0.0; lexical=lexical_score(f,terms)+lexical_score(f,concept_terms)*0.35; matched_terms=[term for term in terms if lexical_score(f,[term])>0]
         total=static*0.45+centrality*0.85+entry_bonus*0.35+distance_bonus*0.75+lexical*1.8 if terms else static+centrality+entry_bonus+distance_bonus
         reasons=[]
         if f.get("entry_point"): reasons.append("entry-point")
@@ -35,5 +35,5 @@ def rank_files(files: list[dict[str, Any]], graph: dict[str, Any], entry_points:
         if d.get("out",0): reasons.append(f"imports:{d['out']}")
         if lexical: reasons.append(f"query-match:{round(lexical,1)}")
         if p in distances: reasons.append(f"entry-distance:{distances[p]}")
-        ranked.append({**f,"rank_score":round(total,3),"rank_reasons":reasons})
+        ranked.append({**f,"rank_score":round(total,3),"rank_reasons":reasons,"query_matched_terms":matched_terms})
     ranked.sort(key=lambda x:(-x["rank_score"],x["path"])); return ranked

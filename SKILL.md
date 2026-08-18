@@ -18,18 +18,20 @@ Use deterministic preprocessing to **Reduce → Verify → Recall** repository c
 ## Default workflow
 
 1. Build/reuse the repository structure, dependency graph and symbol index. Treat this persistent index as the single WARM/Recallable locator source.
-2. Rank/filter/deduplicate repository evidence deterministically and emit a bounded HOT context.
-3. Project only model-necessary evidence into the Model Plane; keep provenance, trust, audit and lifecycle state in the Control Plane.
-4. Bind HOT evidence to repository revision identity. Prefer Git blob identity when Git is available.
-5. If explicit local signals show a context gap, run deterministic repository recall: exact path/symbol first, then bounded local source search and graph hints.
-6. Rehydrate only bounded source evidence: symbol span for symbol hits or a small line snippet for module-level text hits. Never use recall as an excuse to read an entire repository file by default.
-7. Invalidate changed/missing HOT evidence before reuse. A recreated locator may clear a missing tombstone only after the refreshed repository index proves it exists again.
-8. When a provisional claim could be wrong because of partial context, use claim-aware verification recall to search for confirmation/counter-evidence before promotion. Keep its result `inconclusive` when deterministic checks cannot prove semantics.
-9. Use `ContextEvidence` verification only for conclusions the program can prove. Preserve `unknown`/`conflict`; do not turn semantic similarity into proof.
-10. Measure Critical Evidence Recall, false-filter rate, model-visible recall tokens and recall-added model calls. Recall itself should add zero model calls.
-11. Only when the task requires orchestration, opt into the existing Direct/Light/Full runtime harness, fan-in, grader, sandbox and durable-run surfaces. Those are not required to use the reducer core.
+2. Parse every explicit problem into a retained requirement ledger. Ranking schedules evidence per problem; it never authorizes deleting a problem.
+3. Deduplicate only repeated evidence by exact `context_id`. Emit shared evidence once and let later problems reference that identity.
+4. If the HOT budget cannot cover every problem, emit deterministic follow-up batches instead of dropping unresolved problems.
+5. Project only model-necessary evidence into the Model Plane; keep provenance, trust, audit and lifecycle state in the Control Plane.
+6. Bind HOT evidence to repository revision identity. Prefer Git blob identity when Git is available.
+7. If explicit local signals show a context gap, run deterministic repository recall: exact path/symbol first, then bounded local source search and graph hints.
+8. Rehydrate only bounded source evidence: symbol span for symbol hits or a small line snippet for module-level text hits. Never use recall as an excuse to read an entire repository file by default.
+9. Invalidate changed/missing HOT evidence before reuse. A recreated locator may clear a missing tombstone only after the refreshed repository index proves it exists again.
+10. When a provisional claim could be wrong because of partial context, use claim-aware verification recall to search for confirmation/counter-evidence before promotion. Keep its result `inconclusive` when deterministic checks cannot prove semantics.
+11. Use `ContextEvidence` verification only for conclusions the program can prove. Preserve `unknown`/`conflict`; do not turn semantic similarity into proof.
+12. Measure Critical Evidence Recall, false-filter rate, model-visible recall tokens and recall-added model calls. Recall itself should add zero model calls.
+13. Only when the task requires orchestration, opt into the existing Direct/Light/Full runtime harness, fan-in, grader, sandbox and durable-run surfaces. Those are not required to use the reducer core.
 
-Core rule: **not model-visible does not mean deleted**. Keep ambiguous but potentially useful repository evidence recallable unless a deterministic rejection policy proves it should be excluded.
+Core rule: **problems are retained; repeated context is deduplicated**. Not model-visible does not mean deleted. Keep ambiguous but potentially useful repository evidence recallable unless a deterministic rejection policy proves it should be excluded.
 
 ## Common commands
 

@@ -27,6 +27,15 @@ def assess_context_sufficiency(context_pack: dict[str, Any] | None) -> dict[str,
         reasons.append("no-evidence-selected")
     if isinstance(coverage_score, (int, float)) and float(coverage_score) < 0.34:
         reasons.append("low-lexical-coverage")
+    problem_context = context_pack.get("problem_context") if isinstance(context_pack.get("problem_context"), dict) else {}
+    problem_requirements = [item for item in problem_context.get("requirements") or [] if isinstance(item, dict)]
+    incomplete_problem_ids = [
+        str(item.get("id"))
+        for item in problem_requirements
+        if item.get("status") != "covered"
+    ]
+    if incomplete_problem_ids:
+        reasons.append("problem-evidence-incomplete")
     stale = ((context_pack.get("context_store") or {}).get("stale_invalidation_before_refresh") if isinstance(context_pack.get("context_store"), dict) else None)
     if isinstance(stale, dict) and int(stale.get("missing_items") or 0) > 0:
         reasons.append("previous-hot-evidence-missing")
@@ -40,6 +49,8 @@ def assess_context_sufficiency(context_pack: dict[str, Any] | None) -> dict[str,
         "reasons": reasons,
         "evidence_count": evidence_count,
         "lexical_coverage": coverage_score,
+        "problem_count": len(problem_requirements),
+        "incomplete_problem_ids": incomplete_problem_ids,
         "model_calls_added": 0,
-        "note": "This gate detects explicit context gaps only; it is not a semantic completeness proof.",
+        "note": "Every explicit problem must have evidence before continue is recommended; this is still not a semantic completeness proof.",
     }
