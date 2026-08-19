@@ -40,6 +40,7 @@
     "context.synthesis-packet",
     "context.tokenizer",
     "context.trust-boundary",
+    "context.workflow-recall",
     "git.changed",
     "git.diff",
     "harness.complexity",
@@ -105,6 +106,7 @@
       "context.stale-invalidation",
       "context.tokenizer",
       "context.trust-boundary",
+      "context.workflow-recall",
       "quality.filter-audit",
       "quality.recall-benchmark",
       "quality.token-economics"

@@ -10,6 +10,8 @@
 
 Coding Agent 不應把整個 Repository、完整 provenance 或所有歷史 evidence 都付成 model token；但縮減也不能等同刪除。v2.4 延續同一個核心問題：**模型現在必須讀哪些 Repository Context，哪些可以先留在本機、需要時再找回？**
 
+多問題任務會保留每一個問題；只對相同 `context_id` 的重複 evidence 去重。Workflow 分析另建立精簡維度帳本（入口/狀態、持久化、授權、錯誤重試、跨層契約、裝置交付、即時返回）；跨層契約必須同時有 client 與 server evidence 才算覆蓋。完整候選與 provenance 留在 sidecar，模型只收到 bounded evidence references；由於 output 費用較高，模型回覆預設要求 compact、evidence-first 且不重複敘述 context，但仍必須列出未解決項目。
+
 ```text
 Repository
   -> Persistent Index / Graph / Symbols             [WARM：本機，不花 Model Token]

@@ -32,7 +32,7 @@ def split_model_context(
         if not isinstance(item, dict):
             continue
         files.append(_pick(item, (
-            "context_id", "path", "language", "lines", "imports", "classes", "types", "functions",
+            "path", "language", "lines", "imports", "classes", "types", "functions",
             "exports", "routes", "content", "content_mode",
         )))
         file_meta.append({
@@ -46,7 +46,7 @@ def split_model_context(
         if not isinstance(item, dict):
             continue
         symbols.append(_pick(item, (
-            "context_id", "path", "name", "kind", "signature", "start_line", "end_line", "content", "content_mode",
+            "path", "name", "kind", "signature", "start_line", "end_line", "content", "content_mode",
         )))
         symbol_meta.append({
             "index": index,
@@ -58,7 +58,7 @@ def split_model_context(
     for index, item in enumerate(context_pack.get("external_context") or []):
         if not isinstance(item, dict):
             continue
-        external.append(_pick(item, ("context_id", "provider", "path", "url", "title", "content", "snippet", "content_mode")))
+        external.append(_pick(item, ("provider", "path", "url", "title", "content", "snippet", "content_mode")))
         external_meta.append({
             "index": index,
             **_pick(item, ("fingerprint", "provenance", "trust", "support", "estimated_tokens", "context_id")),
@@ -73,6 +73,14 @@ def split_model_context(
             "content_authority": "evidence-only",
             "problems_may_be_filtered": False,
             "duplicate_context_may_be_removed": True,
+            # Output is the expensive side of the model call in the target
+            # deployment. Ask the host/model to cite evidence once, keep the
+            # answer compact, and still surface unresolved work.
+            "output_policy": {
+                "style": "compact-evidence-first",
+                "repeat_context_in_answer": False,
+                "unresolved_items_required": True,
+            },
         },
     }
     if isinstance(context_pack.get("problem_context"), dict):

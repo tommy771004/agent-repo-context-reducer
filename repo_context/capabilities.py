@@ -24,7 +24,7 @@ NATIVE_CAPABILITIES = {
     "context.candidate-detection", "context.deterministic-verifier", "context.git-provenance",
     "context.filter-pipeline", "context.provenance-dedup", "context.cross-layer-dedup",
     "context.agreement-integrity", "context.model-packet", "context.model-context", "context.control-plane", "context.adaptive-reduction",
-    "context.evidence-contract", "context.context-store", "context.recall", "context.claim-verification-recall", "context.problem-preserving-dedup", "context.stale-invalidation",
+    "context.evidence-contract", "context.context-store", "context.recall", "context.claim-verification-recall", "context.problem-preserving-dedup", "context.workflow-recall", "context.stale-invalidation",
     "quality.filter-audit", "quality.token-economics", "quality.scenario-simulation", "quality.recall-benchmark",
     "quality.reducer-benchmark", "quality.final-answer-evaluation",
     "runtime.adapter", "runtime.execute", "runtime.cancellation", "runtime.backpressure", "runtime.telemetry",
@@ -41,7 +41,7 @@ CORE_CAPABILITIES = {
     "context.candidate-detection", "context.deterministic-verifier", "context.git-provenance",
     "context.filter-pipeline", "context.provenance-dedup", "context.cross-layer-dedup",
     "context.agreement-integrity", "context.model-context", "context.control-plane",
-    "context.evidence-contract", "context.context-store", "context.recall", "context.claim-verification-recall", "context.problem-preserving-dedup", "context.stale-invalidation",
+    "context.evidence-contract", "context.context-store", "context.recall", "context.claim-verification-recall", "context.problem-preserving-dedup", "context.workflow-recall", "context.stale-invalidation",
     "quality.filter-audit", "quality.token-economics", "quality.recall-benchmark",
 }
 NATIVE_FALLBACK_CAPABILITIES = {
@@ -96,6 +96,7 @@ CAPABILITY_HINTS: dict[str, tuple[str, ...]] = {
     "context.recall": ("context recall", "recall repository context", "rehydrate context", "recover evidence"),
     "context.claim-verification-recall": ("claim recall", "verification recall", "counter evidence", "claim-aware context"),
     "context.problem-preserving-dedup": ("problem retention", "problem ledger", "shared context", "deduplicate repeated context"),
+    "context.workflow-recall": ("workflow recall", "user journey recall", "cross-layer contract", "error retry coverage"),
     "context.stale-invalidation": ("stale context", "invalidate context", "blob changed", "context drift"),
     "quality.recall-benchmark": ("critical evidence recall", "recall benchmark", "false filter rate"),
     "quality.token-economics": ("token economics", "token amplification", "net token savings"),
